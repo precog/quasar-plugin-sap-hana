@@ -17,12 +17,15 @@
 package quasar.plugin.hana.destination
 
 import scala._, Predef._
+import scala.concurrent.duration._
 
 import quasar.api.destination.DestinationType
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.plugin.jdbc._
 import quasar.plugin.jdbc.destination._
+
+import java.net.URI
 
 import argonaut.Json
 
@@ -36,12 +39,33 @@ import org.slf4s.Logger
 
 object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
 
+  val DefaultConnectionMaxConcurrency: Int = 8
+  val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
+
   val destinationType = DestinationType("hana", 1L)
 
-  def sanitizeDestinationConfig(config: Json): Json = scala.Predef.???
+  // TODO
+  def sanitizeDestinationConfig(config: Json): Json = config
 
   def transactorConfig(config: DestinationConfig)
-      : Either[NonEmptyList[String], TransactorConfig] = scala.Predef.???
+      : Either[NonEmptyList[String], TransactorConfig] =
+    for {
+      cc <- config.connectionConfig.validated.toEither.leftMap(NonEmptyList.one(_))
+
+      maxConcurrency = cc.maxConcurrency getOrElse DefaultConnectionMaxConcurrency
+      maxLifetime = cc.maxLifetime getOrElse DefaultConnectionMaxLifetime
+
+      jdbcUrl <- Either.catchNonFatal(URI.create(cc.jdbcUrl)).leftMap(_ => NonEmptyList.one(
+        "Malformed JDBC connection string, ensure any restricted characters are properly escaped"))
+
+      txConfig =
+        TransactorConfig
+          .withDefaultTimeouts(
+            JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
+            connectionMaxConcurrency = maxConcurrency,
+            connectionReadOnly = false)
+          .copy(connectionMaxLifetime = maxLifetime)
+    } yield txConfig
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: DestinationConfig,

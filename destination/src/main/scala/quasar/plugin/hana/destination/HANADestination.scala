@@ -16,7 +16,7 @@
 
 package quasar.plugin.hana.destination
 
-import scala._
+import scala._, Predef._
 
 import quasar.api.{ColumnType, Label}
 import quasar.api.push.TypeCoercion
@@ -39,18 +39,91 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
     logger: Logger)
     extends Destination[F] {
 
+  type Type = HANAType
+  type TypeId = HANATypeId
+
   val destinationType = HANADestinationModule.destinationType
 
   val typeIdOrdinal: Prism[Int, TypeId] =
-    Prism((_: Int) => scala.Predef.???)((_: TypeId) => scala.Predef.???)
+    Prism(HANADestination.OrdinalMap.get(_))(_.ordinal)
 
   val typeIdLabel: Label[TypeId] =
     Label.label[TypeId](_.toString)
 
-  val sinks: NonEmptyList[ResultSink[F, Type]] =
-    NonEmptyList.one(().asInstanceOf[ResultSink[F, Type]])
+  val sink: ResultSink[F, Type] =
+    ResultSink.CreateSink(CsvCreateSink[F](writeMode, xa, logger))
 
-  def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = scala.Predef.???
+  val sinks: NonEmptyList[ResultSink[F, Type]] = NonEmptyList.one(sink)
 
-  def construct(id: TypeId): Either[Type, Constructor[Type]] = scala.Predef.???
+  def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = {
+    def satisfied(t: TypeId, ts: TypeId*) =
+      TypeCoercion.Satisfied(NonEmptyList(t, ts.toList))
+
+    tpe match {
+      case ColumnType.Boolean => satisfied(
+        HANAType.BOOLEAN)
+
+      case ColumnType.Number => satisfied(
+        HANAType.DOUBLE,
+        HANAType.INTEGER,
+        HANAType.DECIMAL,
+        HANAType.SMALLDECIMAL,
+        HANAType.BIGINT,
+        HANAType.SMALLINT,
+        HANAType.TINYINT,
+        HANAType.REAL,
+        HANAType.FLOAT)
+
+      case ColumnType.String => satisfied(
+        HANAType.NVARCHAR,
+        HANAType.VARCHAR,
+        HANAType.TEXT,
+        HANAType.SHORTTEXT,
+        HANAType.ALPHANUM,
+        HANAType.CLOB,
+        HANAType.NCLOB,
+        HANAType.VARBINARY,
+        HANAType.BLOB)
+
+      case ColumnType.LocalDate => satisfied(
+        HANAType.DATE)
+
+      case ColumnType.LocalTime => satisfied(
+        HANAType.TIME)
+
+      case ColumnType.LocalDateTime => satisfied(
+        HANAType.TIMESTAMP,
+        HANAType.SECONDDATE)
+
+      case ColumnType.OffsetDate =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalDate), None)
+
+      case ColumnType.OffsetTime =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalTime), None)
+
+      case ColumnType.OffsetDateTime =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalDateTime), None)
+
+      case ColumnType.Interval =>
+        TypeCoercion.Unsatisfied(Nil, None)
+
+      case ColumnType.Null =>
+        TypeCoercion.Unsatisfied(Nil, None)
+    }
+  }
+
+  def construct(id: TypeId): Either[Type, Constructor[Type]] = {
+    id match {
+      case tpe: HANATypeId.SelfIdentified => Left(tpe)
+      case hk: HANATypeId.HigherKinded => Right(hk.constructor)
+    }
+  }
+}
+
+object HANADestination {
+  val OrdinalMap: Map[Int, HANATypeId] =
+    HANATypeId.allIds
+      .toList
+      .map(id => (id.ordinal, id))
+      .toMap
 }
