@@ -47,6 +47,6 @@ lazy val destination = project
 
     quasarPluginDependencies ++= Seq(
       "com.precog"            %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
-      "com.sap.cloud.db.jdbc"  % "ngdbc"              % sapVersion pomOnly()
+      "com.sap.cloud.db.jdbc"  % "ngdbc"              % sapVersion// pomOnly()
     ))
   .enablePlugins(QuasarPlugin)

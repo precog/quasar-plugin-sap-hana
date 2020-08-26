@@ -16,7 +16,7 @@
 
 package quasar.plugin.hana.destination
 
-import scala._
+import scala._, Predef._
 
 import quasar.api.{ColumnType, Label}
 import quasar.api.push.TypeCoercion
@@ -39,18 +39,35 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
     logger: Logger)
     extends Destination[F] {
 
+  type Type = HANAType
+  type TypeId = HANATypeId
+
   val destinationType = HANADestinationModule.destinationType
 
   val typeIdOrdinal: Prism[Int, TypeId] =
-    Prism((_: Int) => scala.Predef.???)((_: TypeId) => scala.Predef.???)
+    Prism(HANADestination.OrdinalMap.get(_))(_.ordinal)
 
   val typeIdLabel: Label[TypeId] =
     Label.label[TypeId](_.toString)
 
-  val sinks: NonEmptyList[ResultSink[F, Type]] =
-    NonEmptyList.one(().asInstanceOf[ResultSink[F, Type]])
+  val sink: ResultSink[F, Type] =
+    ResultSink.CreateSink(CsvCreateSink[F](writeMode, xa, logger))
 
-  def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = scala.Predef.???
+  val sinks: NonEmptyList[ResultSink[F, Type]] = NonEmptyList.one(sink)
 
-  def construct(id: TypeId): Either[Type, Constructor[Type]] = scala.Predef.???
+  def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = {
+    TypeCoercion.Satisfied(NonEmptyList.one(HANAType.BOOLEAN))
+  }
+
+  def construct(id: TypeId): Either[Type, Constructor[Type]] = {
+    Left(HANAType.BOOLEAN)
+  }
+}
+
+object HANADestination {
+  val OrdinalMap: Map[Int, HANATypeId] =
+    HANATypeId.allIds
+      .toList
+      .map(id => (id.ordinal, id))
+      .toMap
 }

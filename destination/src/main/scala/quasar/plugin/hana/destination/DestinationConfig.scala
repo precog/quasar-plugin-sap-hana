@@ -16,13 +16,36 @@
 
 package quasar.plugin.hana.destination
 
-import quasar.plugin.jdbc.destination.WriteMode
+import quasar.plugin.hana.ConnectionConfig
+
+import scala.StringContext
+import java.lang.String
 
 import argonaut._, Argonaut._
 
-final case class DestinationConfig(writeMode: WriteMode)
+import cats._
+import cats.implicits._
+
+import quasar.plugin.jdbc.destination.WriteMode
+
+final case class DestinationConfig(
+    connectionConfig: ConnectionConfig,
+    writeMode: WriteMode) {
+
+  def jdbcUrl: String =
+    connectionConfig.jdbcUrl
+
+  def sanitized: DestinationConfig =
+    copy(connectionConfig = connectionConfig.sanitized)
+}
 
 object DestinationConfig {
   implicit val destinationConfigCodecJson: CodecJson[DestinationConfig] =
-    casecodec1(DestinationConfig.apply, DestinationConfig.unapply)("writeMode")
+    casecodec2(DestinationConfig.apply, DestinationConfig.unapply)("connection", "writeMode")
+
+  implicit val destinationConfigEq: Eq[DestinationConfig] =
+    Eq.by(c => (c.connectionConfig, c.writeMode))
+
+  implicit val destinationConfigShow: Show[DestinationConfig] =
+    Show.show(c => s"DestinationConfig(${c.connectionConfig.show}, ${c.writeMode.show})")
 }
