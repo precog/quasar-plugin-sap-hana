@@ -17,6 +17,7 @@
 package quasar.plugin.hana.destination
 
 import scala._, Predef._
+import scala.concurrent.duration._
 
 import quasar.api.destination.DestinationType
 import quasar.connector.MonadResourceErr
@@ -55,8 +56,9 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
         TransactorConfig
           .withDefaultTimeouts(
             JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
-            connectionMaxConcurrency = 10,
+            connectionMaxConcurrency = 8,
             connectionReadOnly = false)
+          .copy(connectionMaxLifetime = 5.minutes)
     } yield txConfig
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
