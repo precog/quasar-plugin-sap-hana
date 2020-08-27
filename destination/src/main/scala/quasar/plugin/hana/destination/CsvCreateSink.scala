@@ -38,14 +38,19 @@ import fs2.{Pipe, Stream}
 
 import org.slf4s.Logger
 
-object CsvCreateSink {
+private[destination] object CsvCreateSink {
   def apply[F[_]: MonadResourceErr: ConcurrentEffect](
       writeMode: WriteMode,
       xa: Transactor[F],
+      hygiene: Hygiene,
       logger: Logger)(
       path: ResourcePath,
-      cols: NonEmptyList[Column[HANAType]])
+      columns: NonEmptyList[Column[HANAType]])
       : (RenderConfig[CharSequence], Pipe[F, CharSequence, Unit]) = {
+
+    import hygiene._
+
+    val logHandler = Slf4sLogHandler(logger)
 
     val renderConfig = RenderConfig.Separated(",", HANAColumnRender)
 
@@ -54,25 +59,39 @@ object CsvCreateSink {
     //
 
     def load(chars: Stream[F, CharSequence]): Stream[F, Unit] = {
-      resourcePathRef(path) match {
-        case Some(ref) => ref.pure[F]
-        case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
-      }
+      val objFragment: F[Fragment] = for {
+        dbo <- resourcePathRef(path) match {
+          case Some(ref) => ref.pure[F]
+          case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
+        }
+
+        hygienicRef = dbo.bimap(
+          hygienicIdent(_),
+          { case (f, s) => (hygienicIdent(f), hygienicIdent(f)) })
+
+        back = hygienicRef.fold(
+          t => Fragment.const0(t.forSql),
+          { case (d, t) => Fragment.const0(d.forSql) ++ fr0"." ++ Fragment.const0(t.forSql) })
+      } yield back
+
+      val hygienicColumns: NonEmptyList[(HygienicIdent, HANAType)] =
+        columns.map(c => (hygienicIdent(Ident(c.name)), c.tpe))
 
       //def insertStatement(value: CharSequence) =
       //  fr"INSERT INTO QuinnCat (col1) VALUES (16)".update.sql
 
-      def insertStatement(value: CharSequence): String =
-        (fr"INSERT INTO QuinnCat (col1) VALUES (" ++
-          Fragment.const0(value.toString) ++
-          fr")").update.sql
+      def insertStatement(value: CharSequence): F[String] =
+        objFragment.map(obj =>
+          (fr"INSERT INTO " ++ obj ++ fr" (col1) VALUES (" ++
+            Fragment.const0(value.toString) ++
+            fr")").update.sql)
 
-      def connect(value: CharSequence): ConnectionIO[Unit] =
-        HC.createStatement(FS.execute(insertStatement(value)).map(_ => ()))
+      def connect(statement: String): ConnectionIO[Unit] =
+        HC.createStatement(FS.execute(statement).map(_ => ()))
 
       chars.evalMap(v => {
         logger.info(s">>>> v: $v")
-        connect(v).transact(xa)
+        insertStatement(v).flatMap(s => connect(s).transact(xa))
       })
     }
 
