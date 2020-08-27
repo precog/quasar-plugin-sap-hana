@@ -65,6 +65,7 @@ private[destination] object CsvCreateSink {
           case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
         }
 
+        // TODO is the schema namespacing required for HANA
         hygienicRef = dbo.bimap(
           hygienicIdent(_),
           { case (f, s) => (hygienicIdent(f), hygienicIdent(f)) })
