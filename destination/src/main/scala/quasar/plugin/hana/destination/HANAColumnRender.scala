@@ -31,31 +31,31 @@ object HANAColumnRender extends ColumnRender[CharSequence] {
 
   def renderNull(columnName: String): CharSequence = "NULL"
 
-  def renderEmptyArray(columnName: String): CharSequence = ""
+  def renderEmptyArray(columnName: String): CharSequence = "FIXME"
 
-  def renderEmptyObject(columnName: String): CharSequence = ""
+  def renderEmptyObject(columnName: String): CharSequence = "FIXME"
 
-  def renderBoolean(columnName: String, value: Boolean): CharSequence = ""
+  def renderBoolean(columnName: String, value: Boolean): CharSequence = "FIXME"
 
   def renderLong(columnName: String, value: Long): CharSequence = value.toString
 
   def renderDouble(columnName: String, value: Double): CharSequence = value.toString
 
-  def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = ""
+  def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = value.toString
 
   def renderString(columnName: String, value: String): CharSequence = value
 
-  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = ""
+  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = "FIXME"
 
-  def renderOffsetTime(columnName: String, value: OffsetTime): CharSequence = ""
+  def renderOffsetTime(columnName: String, value: OffsetTime): CharSequence = "FIXME"
 
-  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = ""
+  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = "FIXME"
 
-  def renderOffsetDate(columnName: String, value: OffsetDate): CharSequence = ""
+  def renderOffsetDate(columnName: String, value: OffsetDate): CharSequence = "FIXME"
 
-  def renderLocalDateTime(columnName: String, value: LocalDateTime): CharSequence = ""
+  def renderLocalDateTime(columnName: String, value: LocalDateTime): CharSequence = "FIXME"
 
-  def renderOffsetDateTime(columnName: String, value: OffsetDateTime): CharSequence = ""
+  def renderOffsetDateTime(columnName: String, value: OffsetDateTime): CharSequence = "FIXME"
 
-  def renderInterval(columnName: String, value: DateTimeInterval): CharSequence = ""
+  def renderInterval(columnName: String, value: DateTimeInterval): CharSequence = "FIXME"
 }
