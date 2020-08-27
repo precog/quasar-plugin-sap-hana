@@ -91,7 +91,7 @@ private[destination] object CsvCreateSink {
         HC.createStatement(FS.execute(statement).map(_ => ()))
 
       chars.evalMap(v => {
-        logger.info(s">>>> v: $v")
+        logger.info(s">>>> v: ${v.toString.getBytes(java.nio.charset.Charset.forName("UTF-8")).toList}")
         val nonull = if (v == "") "null" else v
         insertStatement(nonull).flatMap(s => ConcurrentEffect[F].delay(logger.info(s"statement: $s")) >> connect(s).transact(xa))
       })
