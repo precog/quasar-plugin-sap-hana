@@ -39,6 +39,9 @@ import org.slf4s.Logger
 
 object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
 
+  val DefaultConnectionMaxConcurrency: Int = 8
+  val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
+
   val destinationType = DestinationType("hana", 1L)
 
   // TODO
@@ -49,6 +52,9 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
     for {
       cc <- config.connectionConfig.validated.toEither.leftMap(NonEmptyList.one(_))
 
+      maxConcurrency = cc.maxConcurrency getOrElse DefaultConnectionMaxConcurrency
+      maxLifetime = cc.maxLifetime getOrElse DefaultConnectionMaxLifetime
+
       jdbcUrl <- Either.catchNonFatal(URI.create(cc.jdbcUrl)).leftMap(_ => NonEmptyList.one(
         "Malformed JDBC connection string, ensure any restricted characters are properly escaped"))
 
@@ -56,9 +62,9 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
         TransactorConfig
           .withDefaultTimeouts(
             JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
-            connectionMaxConcurrency = 8,
+            connectionMaxConcurrency = maxConcurrency,
             connectionReadOnly = false)
-          .copy(connectionMaxLifetime = 5.minutes)
+          .copy(connectionMaxLifetime = maxLifetime)
     } yield txConfig
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
