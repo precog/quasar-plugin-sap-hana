@@ -37,9 +37,9 @@ object HANAColumnRender extends ColumnRender[CharSequence] {
 
   def renderBoolean(columnName: String, value: Boolean): CharSequence = ""
 
-  def renderLong(columnName: String, value: Long): CharSequence = ""
+  def renderLong(columnName: String, value: Long): CharSequence = value.toString
 
-  def renderDouble(columnName: String, value: Double): CharSequence = ""
+  def renderDouble(columnName: String, value: Double): CharSequence = value.toString
 
   def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = ""
 
