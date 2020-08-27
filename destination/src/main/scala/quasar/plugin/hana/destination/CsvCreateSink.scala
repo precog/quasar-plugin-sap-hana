@@ -92,8 +92,7 @@ private[destination] object CsvCreateSink {
 
       chars.evalMap(v => {
         logger.info(s">>>> v: ${v.toString}")
-        val nonull = if (v.length() == 0) "null" else v
-        insertStatement(nonull).flatMap(s => ConcurrentEffect[F].delay(logger.info(s"statement: $s")) >> connect(s).transact(xa))
+        insertStatement(v).flatMap(s => ConcurrentEffect[F].delay(logger.info(s"statement: $s")) >> connect(s).transact(xa))
       })
     }
 

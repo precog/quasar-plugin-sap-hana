@@ -27,9 +27,9 @@ import qdata.time.{DateTimeInterval, OffsetDate}
 
 object HANAColumnRender extends ColumnRender[CharSequence] {
 
-  def renderUndefined(columnName: String): CharSequence = ""
+  def renderUndefined(columnName: String): CharSequence = "NULL"
 
-  def renderNull(columnName: String): CharSequence = ""
+  def renderNull(columnName: String): CharSequence = "NULL"
 
   def renderEmptyArray(columnName: String): CharSequence = ""
 
@@ -43,7 +43,7 @@ object HANAColumnRender extends ColumnRender[CharSequence] {
 
   def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = ""
 
-  def renderString(columnName: String, value: String): CharSequence = ""
+  def renderString(columnName: String, value: String): CharSequence = value
 
   def renderLocalTime(columnName: String, value: LocalTime): CharSequence = ""
 
