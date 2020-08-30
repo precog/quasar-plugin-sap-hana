@@ -16,6 +16,8 @@
 
 package quasar.plugin.hana.destination
 
+import quasar.plugin.hana._
+
 import scala._, Predef._
 
 import quasar.api.Column
@@ -42,13 +44,10 @@ private[destination] object CsvCreateSink {
   def apply[F[_]: MonadResourceErr: ConcurrentEffect](
       writeMode: WriteMode,
       xa: Transactor[F],
-      hygiene: Hygiene,
       logger: Logger)(
       path: ResourcePath,
       columns: NonEmptyList[Column[HANAType]])
       : (RenderConfig[CharSequence], Pipe[F, CharSequence, Unit]) = {
-
-    import hygiene._
 
     val logHandler = Slf4sLogHandler(logger)
 
@@ -57,51 +56,85 @@ private[destination] object CsvCreateSink {
     // make table with columns provided
     // respect write mode
     //
+    //
+    val hygienicColumns: NonEmptyList[(HI, HANAType)] =
+      columns.map(c => (HANAHygiene.hygienicIdent(Ident(c.name)), c.tpe))
 
-    def load(chars: Stream[F, CharSequence]): Stream[F, Unit] = {
-      val objFragment: F[Fragment] = for {
-        dbo <- resourcePathRef(path) match {
-          case Some(ref) => ref.pure[F]
-          case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
-        }
+    val objFragmentF: F[Fragment] = for {
+      dbo <- resourcePathRef(path) match {
+        case Some(ref) => ref.pure[F]
+        case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
+      }
 
-        // TODO is the schema namespacing required for HANA
-        hygienicRef = dbo.bimap(
-          hygienicIdent(_),
-          { case (f, s) => (hygienicIdent(f), hygienicIdent(f)) })
+      // TODO is the schema namespacing required for HANA
+      hygienicRef = dbo.bimap(
+        HANAHygiene.hygienicIdent(_),
+        { case (f, s) => (HANAHygiene.hygienicIdent(f), HANAHygiene.hygienicIdent(f)) })
 
-        back = hygienicRef.fold(
-          t => Fragment.const0(t.forSql),
-          { case (d, t) => Fragment.const0(d.forSql) ++ fr0"." ++ Fragment.const0(t.forSql) })
-      } yield back
+      back = hygienicRef.fold(
+        t => Fragment.const0(t.forSql),
+        { case (d, t) => Fragment.const0(d.forSql) ++ fr0"." ++ Fragment.const0(t.forSql) })
+    } yield back
 
-      val hygienicColumns: NonEmptyList[(HygienicIdent, HANAType)] =
-        columns.map(c => (hygienicIdent(Ident(c.name)), c.tpe))
+    def insertStatement(objFragment: Fragment, value: CharSequence): String =
+      (fr"INSERT INTO " ++ objFragment ++ insertColumnSpecs(hygienicColumns) ++ fr" VALUES (" ++
+        Fragment.const0(value.toString) ++
+        fr")").update.sql
 
-      //def insertStatement(value: CharSequence) =
-      //  fr"INSERT INTO QuinnCat (col1) VALUES (16)".update.sql
+    def dropTableIfExists(objFragment: Fragment): ConnectionIO[Int] =
+      (fr"DROP TABLE IF EXISTS" ++ objFragment)
+        .updateWithLogHandler(logHandler)
+        .run
 
-      def insertStatement(value: CharSequence): F[String] =
-        objFragment.map(obj =>
-          (fr"INSERT INTO " ++ obj ++ fr" (col1) VALUES (" ++
-            Fragment.const0(value.toString) ++
-            fr")").update.sql)
+    def truncateTable(objFragment: Fragment): ConnectionIO[Int] =
+      (fr"TRUNCATE" ++ objFragment)
+        .updateWithLogHandler(logHandler)
+        .run
+
+    def createTable(ifNotExists: Boolean)(objFragment: Fragment): ConnectionIO[Int] = {
+      val stmt = if (ifNotExists) fr"CREATE TABLE IF NOT EXISTS" else fr"CREATE TABLE"
+
+      (stmt ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns))
+        .updateWithLogHandler(logHandler)
+        .run
+    }
+
+    def doLoad(obj: Fragment): Pipe[F, CharSequence, Unit] = in => {
+      val writeTable: ConnectionIO[Int] = writeMode match {
+        case WriteMode.Create =>
+          createTable(ifNotExists = false)(obj)
+
+        case WriteMode.Replace =>
+          dropTableIfExists(obj) >> createTable(ifNotExists = false)(obj)
+
+        case WriteMode.Truncate =>
+          createTable(ifNotExists = true)(obj) >> truncateTable(obj)
+      }
 
       def connect(statement: String): ConnectionIO[Unit] =
         HC.createStatement(FS.execute(statement).map(_ => ()))
 
-      chars.evalMap(v => {
-        logger.info(s">>>> v: ${v.toString}")
-        insertStatement(v).flatMap(s => ConcurrentEffect[F].delay(logger.info(s"statement: $s")) >> connect(s).transact(xa))
-      })
+      val write: Stream[F, Int] = Stream.eval(writeTable.transact(xa))
+
+      val insert: Stream[F, Unit] = in evalMap { chars =>
+        connect(insertStatement(obj, chars)).transact(xa)
+      }
+
+      write.drain ++ insert
     }
 
-    (renderConfig, load(_))
+    (renderConfig, in => Stream.eval(objFragmentF).flatMap(obj => doLoad(obj)(in)))
   }
 
-  private def columnSpecs(cols: NonEmptyList[Column[HANAType]]): Fragment =
+  private def createColumnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
     Fragments.parentheses(
       cols
-        .map(_.tpe.asSql)
+        .map { case (n, t) => Fragment.const(n.forSql) ++ t.asSql }
+        .intercalate(fr","))
+
+  private def insertColumnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
+    Fragments.parentheses(
+      cols
+        .map { case (n, _) => Fragment.const(n.forSql) }
         .intercalate(fr","))
 }

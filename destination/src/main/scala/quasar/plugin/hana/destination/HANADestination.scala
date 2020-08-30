@@ -22,7 +22,6 @@ import quasar.api.{ColumnType, Label}
 import quasar.api.push.TypeCoercion
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Constructor, Destination, ResultSink}
-import quasar.plugin.hana.HANAHygiene
 import quasar.plugin.jdbc.destination.WriteMode
 
 import cats.data.NonEmptyList
@@ -52,7 +51,7 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
     Label.label[TypeId](_.toString)
 
   val sink: ResultSink[F, Type] =
-    ResultSink.CreateSink(CsvCreateSink[F](writeMode, xa, HANAHygiene, logger))
+    ResultSink.CreateSink(CsvCreateSink[F](writeMode, xa, logger))
 
   val sinks: NonEmptyList[ResultSink[F, Type]] = NonEmptyList.one(sink)
 
