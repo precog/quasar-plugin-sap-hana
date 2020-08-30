@@ -56,11 +56,22 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
   val sinks: NonEmptyList[ResultSink[F, Type]] = NonEmptyList.one(sink)
 
   def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = {
-    TypeCoercion.Satisfied(NonEmptyList.one(HANAType.BOOLEAN))
+    def satisfied(t: TypeId, ts: TypeId*) =
+      TypeCoercion.Satisfied(NonEmptyList(t, ts.toList))
+
+    tpe match {
+      case ColumnType.Boolean => satisfied(HANAType.BOOLEAN)
+      case ColumnType.Number => satisfied(HANAType.DOUBLE) // FIXME
+      case ColumnType.String => satisfied(HANAType.VARCHAR) // FIXME
+      case _ => TypeCoercion.Unsatisfied(Nil, None) // FIXME datetimes
+    }
   }
 
   def construct(id: TypeId): Either[Type, Constructor[Type]] = {
-    Left(HANAType.BOOLEAN)
+    id match {
+      case tpe: HANATypeId.SelfIdentified => Left(tpe)
+      case hk: HANATypeId.HigherKinded => Right(hk.constructor)
+    }
   }
 }
 
