@@ -76,39 +76,41 @@ private[destination] object CsvCreateSink {
         { case (d, t) => Fragment.const0(d.forSql) ++ fr0"." ++ Fragment.const0(t.forSql) })
     } yield back
 
-    def insertStatement(objFragment: Fragment, value: CharSequence): String =
-      (fr"INSERT INTO " ++ objFragment ++ insertColumnSpecs(hygienicColumns) ++ fr" VALUES (" ++
-        Fragment.const0(value.toString) ++
-        fr")").update.sql
-
-    def dropTableIfExists(objFragment: Fragment): ConnectionIO[Int] =
-      (fr"DROP TABLE IF EXISTS" ++ objFragment)
+    // TODO catch exception when table does not exist
+    // TODO does this need different hygiene?
+    def dropTable(objFragment: Fragment): ConnectionIO[Int] =
+      (fr"DROP TABLE" ++ objFragment)
         .updateWithLogHandler(logHandler)
         .run
 
+    // TODO catch exception when table does not exist
+    // TODO does this need different hygiene?
     def truncateTable(objFragment: Fragment): ConnectionIO[Int] =
       (fr"TRUNCATE" ++ objFragment)
         .updateWithLogHandler(logHandler)
         .run
 
-    def createTable(ifNotExists: Boolean)(objFragment: Fragment): ConnectionIO[Int] = {
-      val stmt = if (ifNotExists) fr"CREATE TABLE IF NOT EXISTS" else fr"CREATE TABLE"
-
-      (stmt ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns))
+    def createTable(objFragment: Fragment): ConnectionIO[Int] = {
+      (fr"CREATE TABLE" ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns))
         .updateWithLogHandler(logHandler)
         .run
     }
 
+    def insertInto(objFragment: Fragment, value: CharSequence): String =
+      (fr"INSERT INTO " ++ objFragment ++ insertColumnSpecs(hygienicColumns) ++ fr" VALUES (" ++
+        Fragment.const0(value.toString) ++
+        fr")").update.sql
+
     def doLoad(obj: Fragment): Pipe[F, CharSequence, Unit] = in => {
       val writeTable: ConnectionIO[Int] = writeMode match {
         case WriteMode.Create =>
-          createTable(ifNotExists = false)(obj)
+          createTable(obj)
 
         case WriteMode.Replace =>
-          dropTableIfExists(obj) >> createTable(ifNotExists = false)(obj)
+          dropTable(obj) >> createTable(obj)
 
         case WriteMode.Truncate =>
-          createTable(ifNotExists = true)(obj) >> truncateTable(obj)
+          createTable(obj) >> truncateTable(obj)
       }
 
       def connect(statement: String): ConnectionIO[Unit] =
@@ -117,7 +119,7 @@ private[destination] object CsvCreateSink {
       val write: Stream[F, Int] = Stream.eval(writeTable.transact(xa))
 
       val insert: Stream[F, Unit] = in evalMap { chars =>
-        connect(insertStatement(obj, chars)).transact(xa)
+        connect(insertInto(obj, chars)).transact(xa)
       }
 
       write.drain ++ insert
