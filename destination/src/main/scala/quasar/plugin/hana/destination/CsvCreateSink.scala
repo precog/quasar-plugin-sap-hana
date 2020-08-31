@@ -53,10 +53,6 @@ private[destination] object CsvCreateSink {
 
     val renderConfig = RenderConfig.Separated(",", HANAColumnRender(columns))
 
-    // make table with columns provided
-    // respect write mode
-    //
-    //
     val hygienicColumns: NonEmptyList[(HI, HANAType)] =
       columns.map(c => (HANAHygiene.hygienicIdent(Ident(c.name)), c.tpe))
 
@@ -116,6 +112,7 @@ private[destination] object CsvCreateSink {
       def connect(statement: String): ConnectionIO[Unit] =
         HC.createStatement(FS.execute(statement).map(_ => ()))
 
+      // TODO do we have to transact after table creation and each insert?
       val write: Stream[F, Int] = Stream.eval(writeTable.transact(xa))
 
       val insert: Stream[F, Unit] = in evalMap { chars =>
