@@ -21,7 +21,7 @@ import quasar.plugin.hana._
 import scala._, Predef._
 
 import quasar.api.Column
-import quasar.api.resource.ResourcePath
+import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.connector.render.RenderConfig
 import quasar.plugin.jdbc._
@@ -57,15 +57,13 @@ private[destination] object CsvCreateSink {
       columns.map(c => (HANAHygiene.hygienicIdent(Ident(c.name)), c.tpe))
 
     val objFragmentF: F[Fragment] = for {
-      dbo <- resourcePathRef(path) match {
+      dbo <- singleResourcePathRef(path) match {
         case Some(ref) => ref.pure[F]
         case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
       }
 
       // TODO is the schema namespacing required for HANA
-      hygienicRef = dbo.bimap(
-        HANAHygiene.hygienicIdent(_),
-        { case (f, s) => (HANAHygiene.hygienicIdent(f), HANAHygiene.hygienicIdent(f)) })
+      hygienicRef = dbo.map(HANAHygiene.hygienicIdent(_))
 
       back = hygienicRef.fold(
         t => Fragment.const0(t.forSql),
@@ -133,4 +131,9 @@ private[destination] object CsvCreateSink {
       cols
         .map { case (n, _) => Fragment.const(n.forSql) }
         .intercalate(fr","))
+
+   def singleResourcePathRef(p: ResourcePath): Option[Ident] =
+    Some(p) collect {
+      case fst /: ResourcePath.Root => Ident(fst)
+    }
 }
