@@ -30,10 +30,9 @@ abstract class HANAType(spec: String) extends Product with Serializable {
   def asSql: Fragment = Fragment.const0(spec)
 }
 
-// TODO higher kindedness
 object HANAType {
   case object DATE extends HANATypeId.SelfIdentified("DATE", 1)
-  case object TIME extends HANATypeId.SelfIdentified("IME", 2)
+  case object TIME extends HANATypeId.SelfIdentified("TIME", 2)
   case object SECONDDATE extends HANATypeId.SelfIdentified("SECONDDATE", 3)
   case object TIMESTAMP extends HANATypeId.SelfIdentified("TIMESTAMP", 4)
 
@@ -96,7 +95,7 @@ object HANAType {
     Labeled("Decimal precision", Formal.integer(Some(Ior.both(1, max)), None, None))
 
   private def LengthScaleParam(max: Int): Labeled[Formal[Int]] =
-    Labeled("Scale precision", Formal.integer(Some(Ior.both(1, max)), None, None))
+    Labeled("Decimal scale", Formal.integer(Some(Ior.both(1, max)), None, None))
 
   private def LengthCharParam(max: Int): Labeled[Formal[Int]] =
     Labeled("Length (characters)", Formal.integer(Some(Ior.both(1, max)), None, None))

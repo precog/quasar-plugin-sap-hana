@@ -51,7 +51,7 @@ private[destination] object CsvCreateSink {
 
     val logHandler = Slf4sLogHandler(logger)
 
-    val renderConfig = RenderConfig.Separated(",", HANAColumnRender)
+    val renderConfig = RenderConfig.Separated(",", HANAColumnRender(columns))
 
     // make table with columns provided
     // respect write mode

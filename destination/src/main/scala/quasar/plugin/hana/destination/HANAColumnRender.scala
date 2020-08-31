@@ -20,22 +20,26 @@ import scala._, Predef._
 
 import java.lang.CharSequence
 import java.time._
+import java.time.format.DateTimeFormatter
 
+import quasar.api.Column
 import quasar.connector.render.ColumnRender
+
+import cats.data.NonEmptyList
 
 import qdata.time.{DateTimeInterval, OffsetDate}
 
-object HANAColumnRender extends ColumnRender[CharSequence] {
+final class HANAColumnRender private (columns: Map[String, HANAType]) extends ColumnRender[CharSequence] {
 
   def renderUndefined(columnName: String): CharSequence = "NULL"
 
   def renderNull(columnName: String): CharSequence = "NULL"
 
-  def renderEmptyArray(columnName: String): CharSequence = "FIXME"
+  def renderEmptyArray(columnName: String): CharSequence = renderUndefined(columnName)
 
-  def renderEmptyObject(columnName: String): CharSequence = "FIXME"
+  def renderEmptyObject(columnName: String): CharSequence = renderUndefined(columnName)
 
-  def renderBoolean(columnName: String, value: Boolean): CharSequence = "FIXME"
+  def renderBoolean(columnName: String, value: Boolean): CharSequence = if (value) "TRUE" else "FALSE"
 
   def renderLong(columnName: String, value: Long): CharSequence = value.toString
 
@@ -45,17 +49,32 @@ object HANAColumnRender extends ColumnRender[CharSequence] {
 
   def renderString(columnName: String, value: String): CharSequence = value
 
-  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = "FIXME"
+  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = value.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
 
-  def renderOffsetTime(columnName: String, value: OffsetTime): CharSequence = "FIXME"
+  def renderOffsetTime(columnName: String, value: OffsetTime): CharSequence = renderUndefined(columnName)
 
-  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = "FIXME"
+  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
-  def renderOffsetDate(columnName: String, value: OffsetDate): CharSequence = "FIXME"
+  def renderOffsetDate(columnName: String, value: OffsetDate): CharSequence = renderUndefined(columnName)
 
-  def renderLocalDateTime(columnName: String, value: LocalDateTime): CharSequence = "FIXME"
+  def renderLocalDateTime(columnName: String, value: LocalDateTime): CharSequence = {
+    columns.get(columnName) match {
+      case Some(HANAType.SECONDDATE) =>
+        value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+      case Some(HANAType.TIMESTAMP) =>
+        value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn")) // 7 nano precision
+      case _ =>
+        renderUndefined(columnName)
+    }
+  }
 
-  def renderOffsetDateTime(columnName: String, value: OffsetDateTime): CharSequence = "FIXME"
+  def renderOffsetDateTime(columnName: String, value: OffsetDateTime): CharSequence = renderUndefined(columnName)
 
-  def renderInterval(columnName: String, value: DateTimeInterval): CharSequence = "FIXME"
+  def renderInterval(columnName: String, value: DateTimeInterval): CharSequence = renderUndefined(columnName)
+}
+
+object HANAColumnRender {
+  def apply(columns: NonEmptyList[Column[HANAType]]): ColumnRender[CharSequence] = {
+    new HANAColumnRender(columns.map(col => (col.name, col.tpe)).toList.toMap)
+  }
 }
