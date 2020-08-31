@@ -60,10 +60,55 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
       TypeCoercion.Satisfied(NonEmptyList(t, ts.toList))
 
     tpe match {
-      case ColumnType.Boolean => satisfied(HANAType.BOOLEAN)
-      case ColumnType.Number => satisfied(HANAType.DOUBLE) // FIXME
-      case ColumnType.String => satisfied(HANAType.VARCHAR) // FIXME
-      case _ => TypeCoercion.Unsatisfied(Nil, None) // FIXME datetimes
+      case ColumnType.Boolean => satisfied(
+        HANAType.BOOLEAN)
+
+      case ColumnType.Number => satisfied(
+        HANAType.DOUBLE,
+        HANAType.INTEGER,
+        HANAType.DECIMAL,
+        HANAType.SMALLDECIMAL,
+        HANAType.BIGINT,
+        HANAType.SMALLINT,
+        HANAType.TINYINT,
+        HANAType.REAL,
+        HANAType.FLOAT)
+
+      case ColumnType.String => satisfied(
+        HANAType.NVARCHAR,
+        HANAType.VARCHAR,
+        HANAType.TEXT,
+        HANAType.SHORTTEXT,
+        HANAType.ALPHANUM,
+        HANAType.CLOB,
+        HANAType.NCLOB,
+        HANAType.VARBINARY,
+        HANAType.BLOB)
+
+      case ColumnType.LocalDate => satisfied(
+        HANAType.DATE)
+
+      case ColumnType.LocalTime => satisfied(
+        HANAType.TIME)
+
+      case ColumnType.LocalDateTime => satisfied(
+        HANAType.TIMESTAMP,
+        HANAType.SECONDDATE)
+
+      case ColumnType.OffsetDate =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalDate), None)
+
+      case ColumnType.OffsetTime =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalTime), None)
+
+      case ColumnType.OffsetDateTime =>
+        TypeCoercion.Unsatisfied(List(ColumnType.LocalDateTime), None)
+
+      case ColumnType.Interval =>
+        TypeCoercion.Unsatisfied(Nil, None)
+
+      case ColumnType.Null =>
+        TypeCoercion.Unsatisfied(Nil, None)
     }
   }
 
