@@ -29,6 +29,7 @@ import cats.data.NonEmptyList
 
 import qdata.time.{DateTimeInterval, OffsetDate}
 
+// TODO do we need to single quote all these?
 final class HANAColumnRender private (columns: Map[String, HANAType]) extends ColumnRender[CharSequence] {
 
   def renderUndefined(columnName: String): CharSequence = "NULL"
@@ -49,20 +50,20 @@ final class HANAColumnRender private (columns: Map[String, HANAType]) extends Co
 
   def renderString(columnName: String, value: String): CharSequence = quote(value)
 
-  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = value.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+  def renderLocalTime(columnName: String, value: LocalTime): CharSequence = quote(value.format(DateTimeFormatter.ofPattern("HH:mm:ss")))
 
   def renderOffsetTime(columnName: String, value: OffsetTime): CharSequence = renderUndefined(columnName)
 
-  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+  def renderLocalDate(columnName: String, value: LocalDate): CharSequence = quote(value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
 
   def renderOffsetDate(columnName: String, value: OffsetDate): CharSequence = renderUndefined(columnName)
 
   def renderLocalDateTime(columnName: String, value: LocalDateTime): CharSequence = {
     columns.get(columnName) match {
       case Some(HANAType.SECONDDATE) =>
-        value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        quote(value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
       case Some(HANAType.TIMESTAMP) =>
-        value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn")) // 7 nano precision
+        quote(value.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn"))) // 7 nano precision
       case _ =>
         renderUndefined(columnName)
     }
