@@ -61,13 +61,8 @@ private[destination] object CsvCreateSink {
         case Some(ref) => ref.pure[F]
         case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
       }
-
-      // TODO is the schema namespacing required for HANA
-      hygienicRef = dbo.map(HANAHygiene.hygienicIdent(_))
-
-      back = hygienicRef.fold(
-        t => Fragment.const0(t.forSql),
-        { case (d, t) => Fragment.const0(d.forSql) ++ fr0"." ++ Fragment.const0(t.forSql) })
+      hygienicRef = HANAHygiene.hygienicIdent(dbo)
+      back = Fragment.const0(hygienicRef.forSql)
     } yield back
 
     // TODO catch exception when table does not exist
@@ -107,7 +102,7 @@ private[destination] object CsvCreateSink {
       def connect(statement: String): ConnectionIO[Unit] =
         HC.createStatement(FS.execute(statement).map(_ => ()))
 
-      // TODO do we have to transact after table creation and each insert?
+      // TODO can we only transact once per push
       val write: Stream[F, Int] = Stream.eval(writeTable.transact(xa))
 
       val insert: Stream[F, Unit] = in evalMap { chars =>
