@@ -42,7 +42,7 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
   val DefaultConnectionMaxConcurrency: Int = 8
   val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
 
-  val destinationType = DestinationType("hana", 1L)
+  val destinationType = DestinationType("sap-hana", 1L)
 
   // TODO
   def sanitizeDestinationConfig(config: Json): Json = config
