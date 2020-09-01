@@ -47,7 +47,7 @@ final class HANAColumnRender private (columns: Map[String, HANAType]) extends Co
 
   def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = value.toString
 
-  def renderString(columnName: String, value: String): CharSequence = value
+  def renderString(columnName: String, value: String): CharSequence = quote(value)
 
   def renderLocalTime(columnName: String, value: LocalTime): CharSequence = value.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
 
@@ -71,6 +71,10 @@ final class HANAColumnRender private (columns: Map[String, HANAType]) extends Co
   def renderOffsetDateTime(columnName: String, value: OffsetDateTime): CharSequence = renderUndefined(columnName)
 
   def renderInterval(columnName: String, value: DateTimeInterval): CharSequence = renderUndefined(columnName)
+
+  ////
+
+  private def quote(chars: CharSequence): CharSequence = s"'$chars'"
 }
 
 object HANAColumnRender {
