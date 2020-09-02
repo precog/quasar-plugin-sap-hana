@@ -93,6 +93,14 @@ private[destination] object CsvCreateSink {
           createTable(objFragment)
       }
 
+    def appendToTable(objFragment: Fragment, unsafeName: String): ConnectionIO[Int] =
+      ifExists(unsafeName).option flatMap { result =>
+        if (result.exists(_ == 1))
+          0.pure[ConnectionIO]
+        else
+          createTable(objFragment)
+      }
+
     def createTable(objFragment: Fragment): ConnectionIO[Int] =
       (fr"CREATE TABLE" ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns))
         .updateWithLogHandler(logHandler)
@@ -103,12 +111,12 @@ private[destination] object CsvCreateSink {
         Fragment.const0(value.toString) ++
         fr")").update.sql
 
-    // TODO support appending
     def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
       val writeTable: ConnectionIO[Int] = writeMode match {
         case WriteMode.Create => createTable(obj)
         case WriteMode.Replace => replaceTable(obj, unsafeName)
         case WriteMode.Truncate => truncateTable(obj, unsafeName)
+        case WriteMode.Append => appendToTable(obj, unsafeName)
       }
 
       def connect(statement: String): ConnectionIO[Unit] =
