@@ -25,6 +25,7 @@ import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.connector.render.RenderConfig
 import quasar.plugin.jdbc._
+import quasar.plugin.jdbc.implicits._
 import quasar.plugin.jdbc.destination.WriteMode
 
 import java.lang.CharSequence
@@ -36,7 +37,7 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 
-import fs2.{Pipe, Stream}
+import fs2.{Chunk, Pipe, Stream}
 
 import org.slf4s.Logger
 
@@ -106,10 +107,20 @@ private[destination] object CsvCreateSink {
         .updateWithLogHandler(logHandler)
         .run
 
-    def insertInto(objFragment: Fragment, value: CharSequence): String =
-      (fr"INSERT INTO " ++ objFragment ++ insertColumnSpecs(hygienicColumns) ++ fr" VALUES (" ++
-        Fragment.const0(value.toString) ++
-        fr")").update.sql
+    def insertIntoPrefix(objFragment: Fragment): (StringBuilder, Int) = {
+      val value = (
+        fr"INSERT INTO" ++
+          objFragment ++
+          insertColumnSpecs(hygienicColumns) ++
+          fr0" VALUES (").update.sql
+
+      val builder = new StringBuilder(value)
+
+      (builder, builder.length)
+    }
+
+    def insertIntoSuffix(value: CharSequence): String =
+      (Fragment.const0(value.toString) ++ fr0")").update.sql
 
     def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
       val writeTable: ConnectionIO[Int] = writeMode match {
@@ -119,17 +130,30 @@ private[destination] object CsvCreateSink {
         case WriteMode.Append => appendToTable(obj, unsafeName)
       }
 
-      def connect(statement: String): ConnectionIO[Unit] =
-        HC.createStatement(FS.execute(statement).map(_ => ()))
+      def insertBatch(prefix: StringBuilder, length: Int, chunk: Chunk[CharSequence])
+          : ConnectionIO[Unit] = {
+        val batch = FS.raw { statement =>
+          chunk foreach { value =>
+            val sql = prefix.append(insertIntoSuffix(value))
+            statement.addBatch(sql.toString)
+            prefix.setLength(length)
+          }
 
-      // TODO can we only transact once per push
-      val write: Stream[F, Int] = Stream.eval(writeTable.transact(xa))
+          statement.executeBatch()
+        }
 
-      val insert: Stream[F, Unit] = in evalMap { chars =>
-        connect(insertInto(obj, chars)).transact(xa)
+        HC.createStatement(batch).map(_ => ())
       }
 
-      write.drain ++ insert
+      def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
+        Stream.resource(xa.strategicConnection) flatMap { c =>
+          Stream.eval(xa.runWith(c).apply(writeTable.map(_ => ()))) ++
+            in.chunks.evalMap(chunk => xa.runWith(c).apply(insertBatch(prefix, length, chunk)))
+        }
+
+      val (prefix, length) = insertIntoPrefix(obj)
+
+      insert(prefix, length)
     }
 
     (renderConfig, in => Stream.eval(objFragmentF) flatMap {
