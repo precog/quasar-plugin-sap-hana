@@ -119,8 +119,8 @@ private[destination] object CsvCreateSink {
       (builder, builder.length)
     }
 
-    def insertIntoSuffix(value: CharSequence): String =
-      (Fragment.const0(value.toString) ++ fr0")").update.sql
+    def insertInto(prefix: StringBuilder, value: CharSequence): StringBuilder =
+      prefix.append(value).append(')')
 
     def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
       val writeTable: ConnectionIO[Int] = writeMode match {
@@ -134,7 +134,7 @@ private[destination] object CsvCreateSink {
           : ConnectionIO[Unit] = {
         val batch = FS.raw { statement =>
           chunk foreach { value =>
-            val sql = prefix.append(insertIntoSuffix(value))
+            val sql = insertInto(prefix, value)
             statement.addBatch(sql.toString)
             prefix.setLength(length)
           }
