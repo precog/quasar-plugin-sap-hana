@@ -73,7 +73,6 @@ object HANAType {
   case object BLOB extends HANATypeId.SelfIdentified("BLOB", 17)
   case object CLOB extends HANATypeId.SelfIdentified("CLOB", 18)
   case object NCLOB extends HANATypeId.SelfIdentified("NCLOB", 19)
-  case object TEXT extends HANATypeId.SelfIdentified("TEXT", 20)
 
   ////
 
@@ -132,7 +131,6 @@ object HANATypeId {
 
       BLOB, // binary large object
       CLOB, // ASCII large object
-      NCLOB, // Unicode large object
-      TEXT, // searchable text, convertable to (N)VARCHAR
+      NCLOB // Unicode large object
     )
 }

@@ -76,7 +76,6 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
       case ColumnType.String => satisfied(
         HANAType.NVARCHAR,
         HANAType.VARCHAR,
-        HANAType.TEXT,
         HANAType.CLOB,
         HANAType.NCLOB,
         HANAType.VARBINARY,
