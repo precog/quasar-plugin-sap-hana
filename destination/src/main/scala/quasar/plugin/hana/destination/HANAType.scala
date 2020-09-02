@@ -118,6 +118,7 @@ object HANATypeId {
       SMALLINT,
       INTEGER,
       BIGINT,
+      FLOAT,
       DECIMAL,
       REAL,
       DOUBLE,
