@@ -116,7 +116,6 @@ object ConnectionConfig {
       "connectTimeout",
       "currentSchema", // maybe let the user set this?
       "cursorHoldabilityType",
-      "databaseName", // maybe let the user set this?
       "deferredPrepare",
       "distribution",
       "ignoreTopology",
