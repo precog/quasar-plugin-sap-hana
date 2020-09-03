@@ -47,7 +47,7 @@ final class HANAColumnRender private (columns: Map[String, HANAType]) extends Co
 
   def renderBigDecimal(columnName: String, value: BigDecimal): CharSequence = value.toString
 
-  def renderString(columnName: String, value: String): CharSequence = quote(value)
+  def renderString(columnName: String, value: String): CharSequence = quote(value.replaceAll("'", "''"))
 
   def renderLocalTime(columnName: String, value: LocalTime): CharSequence = quote(value.format(DateTimeFormatter.ofPattern("HH:mm:ss")))
 
