@@ -39,14 +39,14 @@ lazy val destination = project
   .in(file("destination"))
   .dependsOn(core % BothScopes)
   .settings(
-    name := "quasar-destination-hana",
+    name := "quasar-destination-sap-hana",
 
-    quasarPluginName := "hana",
+    quasarPluginName := "sap-hana",
     quasarPluginQuasarVersion := quasarVersion.value,
     quasarPluginDestinationFqcn := Some("quasar.plugin.hana.destination.HANADestinationModule$"),
 
     quasarPluginDependencies ++= Seq(
       "com.precog"            %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
-      "com.sap.cloud.db.jdbc"  % "ngdbc"              % sapVersion pomOnly()
+      "com.sap.cloud.db.jdbc"  % "ngdbc"              % sapVersion
     ))
   .enablePlugins(QuasarPlugin)
