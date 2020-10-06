@@ -40,7 +40,7 @@ import org.slf4s.Logger
 object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
 
   val DefaultConnectionMaxConcurrency: Int = 8
-  val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
+  val DefaultConnectionMaxLifetime: FiniteDuration = 3.minutes
 
   val destinationType = DestinationType("sap-hana", 1L)
 
@@ -57,6 +57,9 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
 
       jdbcUrl <- Either.catchNonFatal(URI.create(cc.jdbcUrl)).leftMap(_ => NonEmptyList.one(
         "Malformed JDBC connection string, ensure any restricted characters are properly escaped"))
+
+      _ = println("Max lifetime")
+      _ = println(maxLifetime)
 
       txConfig =
         TransactorConfig
