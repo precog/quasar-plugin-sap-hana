@@ -25,13 +25,12 @@ import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.connector.render.RenderConfig
 import quasar.plugin.jdbc._
-import quasar.plugin.jdbc.implicits._
 import quasar.plugin.jdbc.destination.WriteMode
 
 import java.lang.CharSequence
 
 import cats.data.NonEmptyList
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Effect, LiftIO}
 import cats.implicits._
 
 import doobie._
@@ -122,7 +121,7 @@ private[destination] object CsvCreateSink {
     def insertInto(prefix: StringBuilder, value: CharSequence): StringBuilder =
       prefix.append(value).append(')')
 
-    def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
+    def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in0 => {
       val writeTable: ConnectionIO[Int] = writeMode match {
         case WriteMode.Create => createTable(obj)
         case WriteMode.Replace => replaceTable(obj, unsafeName)
@@ -142,14 +141,14 @@ private[destination] object CsvCreateSink {
           statement.executeBatch()
         }
 
-        HC.createStatement(batch).map(_ => ())
+        HC.createStatement(batch).void
       }
 
+      val in: Stream[ConnectionIO, CharSequence] =
+        in0.translate(Effect.toIOK[F] andThen LiftIO.liftK[ConnectionIO])
+
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
-        Stream.resource(xa.strategicConnection) flatMap { c =>
-          Stream.eval(xa.runWith(c).apply(writeTable.map(_ => ()))) ++
-            in.chunks.evalMap(chunk => xa.runWith(c).apply(insertBatch(prefix, length, chunk)))
-        }
+        (Stream.eval(writeTable.void) ++ in.chunks.evalMap(insertBatch(prefix, length, _))).transact(xa)
 
       val (prefix, length) = insertIntoPrefix(obj)
 
