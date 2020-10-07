@@ -30,7 +30,7 @@ import quasar.plugin.jdbc.destination.WriteMode
 import java.lang.CharSequence
 
 import cats.data.NonEmptyList
-import cats.effect.{ConcurrentEffect, Effect, LiftIO}
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 
 import doobie._
@@ -121,7 +121,7 @@ private[destination] object CsvCreateSink {
     def insertInto(prefix: StringBuilder, value: CharSequence): StringBuilder =
       prefix.append(value).append(')')
 
-    def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in0 => {
+    def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
       val writeTable: ConnectionIO[Int] = writeMode match {
         case WriteMode.Create => createTable(obj)
         case WriteMode.Replace => replaceTable(obj, unsafeName)
@@ -144,11 +144,8 @@ private[destination] object CsvCreateSink {
         HC.createStatement(batch).void
       }
 
-      val in: Stream[ConnectionIO, CharSequence] =
-        in0.translate(Effect.toIOK[F] andThen LiftIO.liftK[ConnectionIO])
-
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
-        (Stream.eval(writeTable.void) ++ in.chunks.evalMap(insertBatch(prefix, length, _))).transact(xa)
+        Stream.eval(writeTable.void.transact(xa)) ++ in.chunks.evalMap(insertBatch(prefix, length, _).transact(xa))
 
       val (prefix, length) = insertIntoPrefix(obj)
 
