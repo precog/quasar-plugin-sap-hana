@@ -25,7 +25,6 @@ import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.connector.render.RenderConfig
 import quasar.plugin.jdbc._
-import quasar.plugin.jdbc.implicits._
 import quasar.plugin.jdbc.destination.WriteMode
 
 import java.lang.CharSequence
@@ -142,14 +141,11 @@ private[destination] object CsvCreateSink {
           statement.executeBatch()
         }
 
-        HC.createStatement(batch).map(_ => ())
+        HC.createStatement(batch).void
       }
 
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
-        Stream.resource(xa.strategicConnection) flatMap { c =>
-          Stream.eval(xa.runWith(c).apply(writeTable.map(_ => ()))) ++
-            in.chunks.evalMap(chunk => xa.runWith(c).apply(insertBatch(prefix, length, chunk)))
-        }
+        Stream.eval(writeTable.void.transact(xa)) ++ in.chunks.evalMap(insertBatch(prefix, length, _).transact(xa))
 
       val (prefix, length) = insertIntoPrefix(obj)
 
