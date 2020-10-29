@@ -103,13 +103,16 @@ package object destination {
         .map { case (n, _) => Fragment.const(n.forSql) }
         .intercalate(fr","))
 
-  def insertIntoPrefix(objFragment: Fragment, cols: NonEmptyList[(HI, HANAType)])
+  def insertIntoPrefix(
+    logHandler: LogHandler)(
+    objFragment: Fragment,
+    cols: NonEmptyList[(HI, HANAType)])
       : (StringBuilder, Int) = {
     val value = (
       fr"INSERT INTO" ++
         objFragment ++
         insertColumnSpecs(cols) ++
-        fr0" VALUES (").update.sql
+        fr0" VALUES (").updateWithLogHandler(logHandler).sql
 
     val builder = new StringBuilder(value)
 
@@ -117,11 +120,12 @@ package object destination {
   }
 
   def insertChunk(
+    logHandler: LogHandler)(
     objFragment: Fragment,
     cols: NonEmptyList[(HI, HANAType)],
     chunk: Chunk[CharSequence])
       : ConnectionIO[Unit] = {
-    val (prefix, length) = insertIntoPrefix(objFragment, cols)
+    val (prefix, length) = insertIntoPrefix(logHandler)(objFragment, cols)
     val batch = FS.raw { statement =>
       chunk foreach { value =>
         val sql = prefix.append(value).append(')')

@@ -66,9 +66,10 @@ private[destination] object CsvCreateSink {
         startLoad(logHandler)(writeMode, obj, unsafeName, columns)
 
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
-        Stream.eval(writeTable.void.transact(xa)) ++ in.chunks.evalMap(insertChunk(obj, hygienicColumns, _).transact(xa))
+        Stream.eval(writeTable.void.transact(xa)) ++
+          in.chunks.evalMap(insertChunk(logHandler)(obj, hygienicColumns, _).transact(xa))
 
-      val (prefix, length) = insertIntoPrefix(obj, hygienicColumns)
+      val (prefix, length) = insertIntoPrefix(logHandler)(obj, hygienicColumns)
 
       insert(prefix, length)
     }

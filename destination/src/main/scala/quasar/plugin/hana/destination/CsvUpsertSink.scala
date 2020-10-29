@@ -23,6 +23,7 @@ import quasar.api.push.OffsetKey
 import quasar.connector.destination.ResultSink.UpsertSink
 import quasar.connector.render.RenderConfig
 import quasar.connector.{DataEvent, IdBatch, MonadResourceErr}
+import quasar.plugin.jdbc._
 import quasar.plugin.jdbc.destination.{WriteMode => JWriteMode}
 
 import java.lang.CharSequence
@@ -36,7 +37,7 @@ import doobie.free.connection.{rollback, setAutoCommit, unit}
 import doobie.implicits._
 import doobie.util.transactor.Strategy
 
-import fs2.{Pipe, Stream}
+import fs2.{Chunk, Pipe, Stream}
 
 import org.slf4s.Logger
 
@@ -51,22 +52,23 @@ private[destination] object CsvUpsertSink {
   def apply[F[_]: Effect: MonadResourceErr](
     writeMode: JWriteMode,
     xa0: Transactor[F],
-    logger: Logger)(
-    implicit timer: Timer[F])
+    logger: Logger)(implicit timer: Timer[F])
       : UpsertSink.Args[HANAType] => (RenderConfig[CharSequence], ∀[Consume[F, ?]]) = {
 
     val strategy = Strategy(setAutoCommit(false), unit, rollback, unit)
     val xa = Transactor.strategy.modify(xa0, _ => strategy)
 
-    run(xa, writeMode)
+    run(xa, writeMode, logger)
   }
 
   private def run[F[_]: Effect: MonadResourceErr](
     xa: Transactor[F],
-    writeMode: JWriteMode)(
-    args: UpsertSink.Args[HANAType])(
-    implicit timer: Timer[F])
+    writeMode: JWriteMode,
+    logger: Logger)(
+    args: UpsertSink.Args[HANAType])(implicit timer: Timer[F])
       : (RenderConfig[CharSequence], ∀[Consume[F, ?]]) = {
+
+    val logHandler = Slf4sLogHandler(logger)
 
     val columns = hygienicColumns(args.columns)
 
@@ -92,17 +94,29 @@ private[destination] object CsvUpsertSink {
         }
       }
 
+      def logEvents(event: DataEvent[CharSequence, _]): F[Unit] =
+        event match {
+          case DataEvent.Create(chunk) =>
+            trace(logger)(s"Loading chunk with size: ${chunk.size}")
+
+          case DataEvent.Delete(idBatch) =>
+            trace(logger)(s"Deleting ${idBatch.size} records")
+
+          case DataEvent.Commit(_) =>
+            trace(logger)("Ignoring commit")
+        }
+
       def handleEvents(objFragment: Fragment, unsafeName: String)
-          : Stream[F, Option[OffsetKey.Actual[A]]] =
-        dataEvents evalMap {
+          : Pipe[F, DataEvent[CharSequence, OffsetKey.Actual[A]], Option[OffsetKey.Actual[A]]] =
+        _ evalMap {
           case DataEvent.Create(records) =>
-            insertChunk(objFragment, columns, records)
+            insertChunk(logHandler)(objFragment, columns, records)
               .transact(xa)
               .as(none[OffsetKey.Actual[A]])
 
           case DataEvent.Delete(recordIds) =>
             deleteBatch(recordIds, objFragment)
-              .update
+              .updateWithLogHandler(logHandler)
               .run
               .transact(xa)
               .as(none[OffsetKey.Actual[A]])
@@ -114,10 +128,20 @@ private[destination] object CsvUpsertSink {
       Stream.force(
         for {
           (objFragment, unsafeName) <- MonadResourceErr.unattempt_(pathFragment(args.path).asScalaz)
-          handled = handleEvents(objFragment, unsafeName).unNone
-        } yield handled)
+          start = startLoad(logHandler)(writeMode, objFragment, unsafeName, args.columns).transact(xa)
+          handled =
+            dataEvents
+              .evalTap(logEvents)
+              .through(handleEvents(objFragment, unsafeName))
+              .unNone
+
+          out = Stream.eval_(start) ++ handled
+        } yield out)
     }
 
     (RenderConfig.Separated(",", HANAColumnRender(args.columns)), ∀[Consume[F, ?]](load(_)))
   }
+
+  private def trace[F[_]: Effect](log: Logger)(msg: => String): F[Unit] =
+    Effect[F].delay(log.trace(msg))
 }
