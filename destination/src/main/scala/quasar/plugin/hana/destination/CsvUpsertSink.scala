@@ -129,13 +129,16 @@ private[destination] object CsvUpsertSink {
         for {
           (objFragment, unsafeName) <- MonadResourceErr.unattempt_(pathFragment(args.path).asScalaz)
           start = startLoad(logHandler)(writeMode, objFragment, unsafeName, args.columns).transact(xa)
+          logStart = trace(logger)("Starting load")
+          logEnd = trace(logger)("Finished load")
+
           handled =
             dataEvents
               .evalTap(logEvents)
               .through(handleEvents(objFragment, unsafeName))
               .unNone
 
-          out = Stream.eval_(start) ++ handled
+          out = Stream.eval_(logStart) ++ Stream.eval_(start) ++ handled ++ Stream.eval_(logEnd)
         } yield out)
     }
 
