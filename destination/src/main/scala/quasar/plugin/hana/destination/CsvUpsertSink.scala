@@ -146,5 +146,5 @@ private[destination] object CsvUpsertSink {
   }
 
   private def trace[F[_]: Effect](log: Logger)(msg: => String): F[Unit] =
-    Effect[F].delay(log.trace(msg))
+    Effect[F].delay(println(msg))
 }
