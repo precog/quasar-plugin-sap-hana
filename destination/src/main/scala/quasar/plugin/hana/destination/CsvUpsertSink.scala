@@ -76,7 +76,7 @@ private[destination] object CsvUpsertSink {
           fr"DELETE FROM" ++
             objFragment ++
             fr"WHERE " ++
-            Fragment.const(columnName.asIdent.asString)
+            Fragment.const(columnName.forSql)
 
         val del = recordIds match {
           case IdBatch.Strings(values, size) =>
