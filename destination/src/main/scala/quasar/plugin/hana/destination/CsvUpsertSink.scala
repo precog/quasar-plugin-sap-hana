@@ -21,6 +21,7 @@ import scala._, Predef._
 
 import quasar.api.push.OffsetKey
 import quasar.connector.destination.ResultSink.UpsertSink
+import quasar.connector.destination.{WriteMode => QWriteMode}
 import quasar.connector.render.RenderConfig
 import quasar.connector.{DataEvent, IdBatch, MonadResourceErr}
 import quasar.plugin.hana.HANAHygiene
@@ -30,13 +31,13 @@ import quasar.plugin.jdbc.destination.{WriteMode => JWriteMode}
 import java.lang.CharSequence
 
 import cats.data.NonEmptyVector
-import cats.effect.{Effect, Timer}
+import cats.effect.Effect
 import cats.implicits._
 
 import doobie._
 import doobie.implicits._
 
-import fs2.{Chunk, Pipe, Stream}
+import fs2.{Pipe, Stream}
 
 import org.slf4s.Logger
 
@@ -51,7 +52,7 @@ private[destination] object CsvUpsertSink {
   def apply[F[_]: Effect: MonadResourceErr](
     writeMode: JWriteMode,
     xa: Transactor[F],
-    logger: Logger)(implicit timer: Timer[F])
+    logger: Logger)
       : UpsertSink.Args[HANAType] => (RenderConfig[CharSequence], ∀[Consume[F, ?]]) =
     run(xa, writeMode, logger)
 
@@ -59,7 +60,7 @@ private[destination] object CsvUpsertSink {
     xa: Transactor[F],
     writeMode: JWriteMode,
     logger: Logger)(
-    args: UpsertSink.Args[HANAType])(implicit timer: Timer[F])
+    args: UpsertSink.Args[HANAType])
       : (RenderConfig[CharSequence], ∀[Consume[F, ?]]) = {
 
     val logHandler = Slf4sLogHandler(logger)
@@ -78,24 +79,16 @@ private[destination] object CsvUpsertSink {
             fr" WHERE" ++
             Fragment.const(columnName.forSql)
 
-        val del = recordIds match {
+        recordIds match {
           case IdBatch.Strings(values, size) =>
-            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Longs(values, size) =>
-            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Doubles(values, size) =>
-            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.BigDecimals(values, size) =>
-            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
         }
-
-        println(del)
-
-        del
       }
 
       def logEvents(event: DataEvent[CharSequence, _]): F[Unit] =
@@ -132,7 +125,13 @@ private[destination] object CsvUpsertSink {
       Stream.force(
         for {
           (objFragment, unsafeName) <- MonadResourceErr.unattempt_(pathFragment(args.path).asScalaz)
-          start = startLoad(logHandler)(writeMode, objFragment, unsafeName, args.columns).transact(xa)
+
+          start = args.writeMode match {
+            case QWriteMode.Replace =>
+              startLoad(logHandler)(writeMode, objFragment, unsafeName, args.columns).transact(xa)
+            case QWriteMode.Append =>
+              ().pure[F]
+          }
 
           logStart = trace(logger)("Starting load")
           logEnd = trace(logger)("Finished load")
@@ -150,6 +149,6 @@ private[destination] object CsvUpsertSink {
     (RenderConfig.Separated(",", HANAColumnRender(args.columns)), ∀[Consume[F, ?]](load(_)))
   }
 
-  private def trace[F[_]: Effect](log: Logger)(msg: => String): F[Unit] =
-    Effect[F].delay(println(msg))
+  private def trace[F[_]: Effect](logger: Logger)(msg: => String): F[Unit] =
+    Effect[F].delay(logger.trace(msg))
 }
