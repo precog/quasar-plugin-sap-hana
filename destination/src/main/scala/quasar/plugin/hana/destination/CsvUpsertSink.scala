@@ -23,6 +23,7 @@ import quasar.api.push.OffsetKey
 import quasar.connector.destination.ResultSink.UpsertSink
 import quasar.connector.render.RenderConfig
 import quasar.connector.{DataEvent, IdBatch, MonadResourceErr}
+import quasar.plugin.hana.HANAHygiene
 import quasar.plugin.jdbc._
 import quasar.plugin.jdbc.destination.{WriteMode => JWriteMode}
 
@@ -33,9 +34,7 @@ import cats.effect.{Effect, Timer}
 import cats.implicits._
 
 import doobie._
-import doobie.free.connection.{rollback, setAutoCommit, unit}
 import doobie.implicits._
-import doobie.util.transactor.Strategy
 
 import fs2.{Chunk, Pipe, Stream}
 
@@ -71,11 +70,13 @@ private[destination] object CsvUpsertSink {
         : Stream[F, OffsetKey.Actual[A]] = {
 
       def deleteBatch(recordIds: IdBatch, objFragment: Fragment): Fragment = {
+        val columnName = HANAHygiene.hygienicIdent(Ident(args.idColumn.name))
+
         val preamble: Fragment =
           fr"DELETE FROM" ++
             objFragment ++
-            fr"WHERE" ++
-            Fragment.const(args.idColumn.name)
+            fr"WHERE " ++
+            Fragment.const(columnName.asIdent.asString)
 
         val del = recordIds match {
           case IdBatch.Strings(values, size) =>
