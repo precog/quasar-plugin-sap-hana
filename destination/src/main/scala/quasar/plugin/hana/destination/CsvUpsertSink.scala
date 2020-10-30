@@ -80,16 +80,16 @@ private[destination] object CsvUpsertSink {
 
         val del = recordIds match {
           case IdBatch.Strings(values, size) =>
-            println(values.take(size))
+            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Longs(values, size) =>
-            println(values.take(size))
+            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Doubles(values, size) =>
-            println(values.take(size))
+            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.BigDecimals(values, size) =>
-            println(values.take(size))
+            println(values.take(size).toList)
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
         }
 
