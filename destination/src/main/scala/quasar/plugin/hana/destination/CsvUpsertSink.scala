@@ -75,17 +75,21 @@ private[destination] object CsvUpsertSink {
         val preamble: Fragment =
           fr"DELETE FROM" ++
             objFragment ++
-            fr"WHERE " ++
+            fr" WHERE" ++
             Fragment.const(columnName.forSql)
 
         val del = recordIds match {
           case IdBatch.Strings(values, size) =>
+            println(values.take(size))
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Longs(values, size) =>
+            println(values.take(size))
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Doubles(values, size) =>
+            println(values.take(size))
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.BigDecimals(values, size) =>
+            println(values.take(size))
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
         }
 
