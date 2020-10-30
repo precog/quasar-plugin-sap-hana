@@ -51,15 +51,10 @@ private[destination] object CsvUpsertSink {
 
   def apply[F[_]: Effect: MonadResourceErr](
     writeMode: JWriteMode,
-    xa0: Transactor[F],
+    xa: Transactor[F],
     logger: Logger)(implicit timer: Timer[F])
-      : UpsertSink.Args[HANAType] => (RenderConfig[CharSequence], ∀[Consume[F, ?]]) = {
-
-    val strategy = Strategy(setAutoCommit(false), unit, rollback, unit)
-    val xa = Transactor.strategy.modify(xa0, _ => strategy)
-
+      : UpsertSink.Args[HANAType] => (RenderConfig[CharSequence], ∀[Consume[F, ?]]) =
     run(xa, writeMode, logger)
-  }
 
   private def run[F[_]: Effect: MonadResourceErr](
     xa: Transactor[F],
@@ -82,7 +77,7 @@ private[destination] object CsvUpsertSink {
             fr"WHERE" ++
             Fragment.const(args.idColumn.name)
 
-        recordIds match {
+        val del = recordIds match {
           case IdBatch.Strings(values, size) =>
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
           case IdBatch.Longs(values, size) =>
@@ -92,6 +87,10 @@ private[destination] object CsvUpsertSink {
           case IdBatch.BigDecimals(values, size) =>
             Fragments.in(preamble, NonEmptyVector.fromVectorUnsafe(values.take(size).toVector))
         }
+
+        println(del)
+
+        del
       }
 
       def logEvents(event: DataEvent[CharSequence, _]): F[Unit] =
@@ -129,6 +128,7 @@ private[destination] object CsvUpsertSink {
         for {
           (objFragment, unsafeName) <- MonadResourceErr.unattempt_(pathFragment(args.path).asScalaz)
           start = startLoad(logHandler)(writeMode, objFragment, unsafeName, args.columns).transact(xa)
+
           logStart = trace(logger)("Starting load")
           logEnd = trace(logger)("Finished load")
 
