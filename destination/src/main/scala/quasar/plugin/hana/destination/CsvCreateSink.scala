@@ -21,8 +21,8 @@ import quasar.plugin.hana._
 import scala._, Predef._
 
 import quasar.api.Column
-import quasar.api.resource.{/:, ResourcePath}
-import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.api.resource.ResourcePath
+import quasar.connector.MonadResourceErr
 import quasar.connector.render.RenderConfig
 import quasar.plugin.jdbc._
 import quasar.plugin.jdbc.destination.WriteMode
@@ -36,9 +36,11 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 
-import fs2.{Chunk, Pipe, Stream}
+import fs2.{Pipe, Stream}
 
 import org.slf4s.Logger
+
+import shims._
 
 private[destination] object CsvCreateSink {
   def apply[F[_]: MonadResourceErr: ConcurrentEffect](
@@ -56,98 +58,18 @@ private[destination] object CsvCreateSink {
     val hygienicColumns: NonEmptyList[(HI, HANAType)] =
       columns.map(c => (HANAHygiene.hygienicIdent(Ident(c.name)), c.tpe))
 
-    val objFragmentF: F[(Fragment, String)] = for {
-      dbo <- singleResourcePathRef(path) match {
-        case Some(ref) => ref.pure[F]
-        case _ => MonadResourceErr[F].raiseError(ResourceError.notAResource(path))
-      }
-      hygienicRef = HANAHygiene.hygienicIdent(dbo)
-      fragment = Fragment.const0(hygienicRef.forSql)
-      unsafeName = s"""${dbo.asString}""" // this is fine
-    } yield (fragment, unsafeName)
-
-    def ifExists(unsafeName: String): Query0[Int] = {
-      (fr0"SELECT count(*) as exists_flag FROM TABLES WHERE TABLE_NAME='" ++ Fragment.const0(unsafeName) ++ fr0"'")
-        .queryWithLogHandler[Int](logHandler)
-    }
-
-    def replaceTable(objFragment: Fragment, unsafeName: String): ConnectionIO[Int] =
-      ifExists(unsafeName).option flatMap { result =>
-        if (result.exists(_ == 1)) {
-          val drop = (fr"DROP TABLE" ++ objFragment)
-            .updateWithLogHandler(logHandler)
-            .run
-          drop >> createTable(objFragment)
-        } else {
-          createTable(objFragment)
-        }
-      }
-
-    def truncateTable(objFragment: Fragment, unsafeName: String): ConnectionIO[Int] =
-      ifExists(unsafeName).option flatMap { result =>
-        if (result.exists(_ == 1))
-          (fr"TRUNCATE TABLE" ++ objFragment)
-            .updateWithLogHandler(logHandler)
-            .run
-        else
-          createTable(objFragment)
-      }
-
-    def appendToTable(objFragment: Fragment, unsafeName: String): ConnectionIO[Int] =
-      ifExists(unsafeName).option flatMap { result =>
-        if (result.exists(_ == 1))
-          0.pure[ConnectionIO]
-        else
-          createTable(objFragment)
-      }
-
-    def createTable(objFragment: Fragment): ConnectionIO[Int] =
-      (fr"CREATE TABLE" ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns))
-        .updateWithLogHandler(logHandler)
-        .run
-
-    def insertIntoPrefix(objFragment: Fragment): (StringBuilder, Int) = {
-      val value = (
-        fr"INSERT INTO" ++
-          objFragment ++
-          insertColumnSpecs(hygienicColumns) ++
-          fr0" VALUES (").update.sql
-
-      val builder = new StringBuilder(value)
-
-      (builder, builder.length)
-    }
-
-    def insertInto(prefix: StringBuilder, value: CharSequence): StringBuilder =
-      prefix.append(value).append(')')
+    val objFragmentF: F[(Fragment, String)] =
+      MonadResourceErr.unattempt_(pathFragment(path).asScalaz)
 
     def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
-      val writeTable: ConnectionIO[Int] = writeMode match {
-        case WriteMode.Create => createTable(obj)
-        case WriteMode.Replace => replaceTable(obj, unsafeName)
-        case WriteMode.Truncate => truncateTable(obj, unsafeName)
-        case WriteMode.Append => appendToTable(obj, unsafeName)
-      }
-
-      def insertBatch(prefix: StringBuilder, length: Int, chunk: Chunk[CharSequence])
-          : ConnectionIO[Unit] = {
-        val batch = FS.raw { statement =>
-          chunk foreach { value =>
-            val sql = insertInto(prefix, value)
-            statement.addBatch(sql.toString)
-            prefix.setLength(length)
-          }
-
-          statement.executeBatch()
-        }
-
-        HC.createStatement(batch).void
-      }
+      val writeTable: ConnectionIO[Int] =
+        startLoad(logHandler)(writeMode, obj, unsafeName, columns)
 
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
-        Stream.eval(writeTable.void.transact(xa)) ++ in.chunks.evalMap(insertBatch(prefix, length, _).transact(xa))
+        Stream.eval(writeTable.void.transact(xa)) ++
+          in.chunks.evalMap(insertChunk(logHandler)(obj, hygienicColumns, _).transact(xa))
 
-      val (prefix, length) = insertIntoPrefix(obj)
+      val (prefix, length) = insertIntoPrefix(logHandler)(obj, hygienicColumns)
 
       insert(prefix, length)
     }
@@ -156,21 +78,4 @@ private[destination] object CsvCreateSink {
       case (obj, str) => doLoad(obj, str)(in)
     })
   }
-
-  private def createColumnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
-    Fragments.parentheses(
-      cols
-        .map { case (n, t) => Fragment.const(n.forSql) ++ t.asSql }
-        .intercalate(fr","))
-
-  private def insertColumnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
-    Fragments.parentheses(
-      cols
-        .map { case (n, _) => Fragment.const(n.forSql) }
-        .intercalate(fr","))
-
-   def singleResourcePathRef(p: ResourcePath): Option[Ident] =
-    Some(p) collect {
-      case fst /: ResourcePath.Root => Ident(fst)
-    }
 }

@@ -50,10 +50,10 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
   val typeIdLabel: Label[TypeId] =
     Label.label[TypeId](_.toString)
 
-  val sink: ResultSink[F, Type] =
-    ResultSink.CreateSink(CsvCreateSink[F](writeMode, xa, logger))
-
-  val sinks: NonEmptyList[ResultSink[F, Type]] = NonEmptyList.one(sink)
+  val sinks: NonEmptyList[ResultSink[F, Type]] =
+    NonEmptyList.of(
+      ResultSink.create(CsvCreateSink[F](writeMode, xa, logger)),
+      ResultSink.upsert(CsvUpsertSink[F](writeMode, xa, logger)))
 
   def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = {
     def satisfied(t: TypeId, ts: TypeId*) =
