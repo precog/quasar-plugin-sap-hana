@@ -67,9 +67,9 @@ private[destination] object CsvUpsertSink {
 
           val preamble: Fragment =
             fr"DELETE FROM" ++
-          objFragment ++
-          fr" WHERE" ++
-          Fragment.const(columnName.forSql)
+              objFragment ++
+              fr" WHERE" ++
+              Fragment.const(columnName.forSql)
 
           recordIds match {
             case IdBatch.Strings(values, size) =>
@@ -110,6 +110,11 @@ private[destination] object CsvUpsertSink {
                 .transact(xa)
                 .as(none[OffsetKey.Actual[A]])
 
+            // We don't need to do anything here since we're commiting
+            // once per chunk. We can't run the push within a single
+            // transaction since HANA prunes long-running transactions
+            // often. This is safe since the implementation only inserts
+            // commits at end of the stream
             case DataEvent.Commit(offset) =>
               offset.some.pure[F]
           }
