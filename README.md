@@ -37,3 +37,4 @@ JSON configurating describing how to connect to SAP HANA.
 * `jdbcUrl`: a SAP HANA [connection string](https://help.sap.com/viewer/f1b440ded6144a54ada97ff95dac7adf/2.5/en-US/ff15928cf5594d78b841fbbe649f04b4.html). Note that any connection parameter values containing URI [reserved characters](https://tools.ietf.org/html/rfc3986#section-2.2) must be [percent encoded](https://tools.ietf.org/html/rfc3986#section-2.1) to avoid ambiguity.
 * `maxConcurrency` (optional): the maximum number of simultaneous connections to the database (default: 8)
 * `maxLifetimeSecs` (optional): the maximum lifetime, in seconds, of idle connections. If your database or infrastructure imposes any limit on idle connections, make sure to set this value to at most a few seconds less than the limit (default: 300 seconds)
+
