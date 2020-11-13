@@ -25,8 +25,8 @@ import quasar.connector.destination.{WriteMode => QWriteMode}
 import quasar.connector.render.RenderConfig
 import quasar.connector.{DataEvent, IdBatch, MonadResourceErr}
 import quasar.plugin.hana.HANAHygiene
-import quasar.plugin.jdbc._
-import quasar.plugin.jdbc.destination.{WriteMode => JWriteMode}
+import quasar.lib.jdbc._
+import quasar.lib.jdbc.destination.{WriteMode => JWriteMode}
 
 import java.lang.CharSequence
 
