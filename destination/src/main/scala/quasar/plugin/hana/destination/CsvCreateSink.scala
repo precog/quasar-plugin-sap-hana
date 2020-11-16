@@ -24,8 +24,8 @@ import quasar.api.Column
 import quasar.api.resource.ResourcePath
 import quasar.connector.MonadResourceErr
 import quasar.connector.render.RenderConfig
-import quasar.plugin.jdbc._
-import quasar.plugin.jdbc.destination.WriteMode
+import quasar.lib.jdbc._
+import quasar.lib.jdbc.destination.WriteMode
 
 import java.lang.CharSequence
 

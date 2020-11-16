@@ -21,8 +21,8 @@ import scala._, Predef._
 import quasar.api.Column
 import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.ResourceError
-import quasar.plugin.jdbc.Ident
-import quasar.plugin.jdbc.destination.WriteMode
+import quasar.lib.jdbc.Ident
+import quasar.lib.jdbc.destination.WriteMode
 
 import cats.data.NonEmptyList
 import cats.implicits._

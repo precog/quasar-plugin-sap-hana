@@ -22,8 +22,8 @@ import scala.concurrent.duration._
 import quasar.api.destination.DestinationType
 import quasar.connector.MonadResourceErr
 import quasar.connector.destination.{Destination, PushmiPullyu}
-import quasar.plugin.jdbc._
-import quasar.plugin.jdbc.destination._
+import quasar.lib.jdbc._
+import quasar.lib.jdbc.destination._
 
 import java.net.URI
 

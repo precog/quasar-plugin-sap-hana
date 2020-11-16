@@ -18,7 +18,7 @@ package quasar.plugin.hana
 
 import scala.StringContext
 
-import quasar.plugin.jdbc.{Hygiene, Hygienic, Ident}
+import quasar.lib.jdbc.{Hygiene, Hygienic, Ident}
 
 object HANAHygiene extends Hygiene {
   final case class HygienicIdent(asIdent: Ident) extends Hygienic {

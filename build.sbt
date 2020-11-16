@@ -14,8 +14,8 @@ ThisBuild / publishAsOSSProject := true
 lazy val quasarVersion =
   Def.setting[String](managedVersions.value("precog-quasar"))
 
-lazy val quasarPluginJdbcVersion =
-  Def.setting[String](managedVersions.value("precog-quasar-plugin-jdbc"))
+lazy val quasarLibJdbcVersion =
+  Def.setting[String](managedVersions.value("precog-quasar-lib-jdbc"))
 
 val sapVersion = "2.5.50"
 val specs2Version = "4.9.4"
@@ -31,8 +31,8 @@ lazy val core = project
     name := "quasar-plugin-sap-hana",
 
     libraryDependencies ++= Seq(
-      "com.precog" %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
-      "org.specs2" %% "specs2-core"        % specs2Version % Test
+      "com.precog" %% "quasar-lib-jdbc" % quasarLibJdbcVersion.value,
+      "org.specs2" %% "specs2-core"     % specs2Version % Test
     ))
 
 lazy val destination = project
@@ -46,7 +46,7 @@ lazy val destination = project
     quasarPluginDestinationFqcn := Some("quasar.plugin.hana.destination.HANADestinationModule$"),
 
     quasarPluginDependencies ++= Seq(
-      "com.precog"            %% "quasar-plugin-jdbc" % quasarPluginJdbcVersion.value,
-      "com.sap.cloud.db.jdbc"  % "ngdbc"              % sapVersion
+      "com.precog"            %% "quasar-lib-jdbc" % quasarLibJdbcVersion.value,
+      "com.sap.cloud.db.jdbc"  % "ngdbc"            % sapVersion
     ))
   .enablePlugins(QuasarPlugin)
