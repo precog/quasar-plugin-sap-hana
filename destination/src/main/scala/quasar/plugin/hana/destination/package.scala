@@ -40,6 +40,14 @@ package object destination {
       .queryWithLogHandler[Int](logHandler)
   }
 
+  def ifIndexExists(logHandler: LogHandler)(unsafeName: String): Query0[Int] = {
+    val idxName = Fragment.const0(s"precog_id_idx_$unsafeName")
+
+    (fr0"SELECT count(*) as exists_flag FROM INDEXES WHERE TABLE_NAME='" ++ Fragment.const0(unsafeName) ++ fr0"'" ++
+      fr0" AND INDEX_NAME='" ++ idxName ++ fr0"'")
+      .queryWithLogHandler[Int](logHandler)
+  }
+
   def replaceTable(logHandler: LogHandler)(
     objFragment: Fragment,
     unsafeName: String,
@@ -157,11 +165,35 @@ package object destination {
     writeMode: WriteMode,
     obj: Fragment,
     unsafeName: String,
-    columns: NonEmptyList[Column[HANAType]])
-      : ConnectionIO[Int] = writeMode match {
-    case WriteMode.Create => createTable(logHandler)(obj, columns)
-    case WriteMode.Replace => replaceTable(logHandler)(obj, unsafeName, columns)
-    case WriteMode.Truncate => truncateTable(logHandler)(obj, unsafeName, columns)
-    case WriteMode.Append => appendToTable(logHandler)(obj, unsafeName, columns)
+    columns: NonEmptyList[Column[HANAType]],
+    idColumn: Option[Column[_]])
+      : ConnectionIO[Unit] = {
+
+    val prepareTable = writeMode match {
+      case WriteMode.Create => createTable(logHandler)(obj, columns)
+      case WriteMode.Replace => replaceTable(logHandler)(obj, unsafeName, columns)
+      case WriteMode.Truncate => truncateTable(logHandler)(obj, unsafeName, columns)
+      case WriteMode.Append => appendToTable(logHandler)(obj, unsafeName, columns)
+    }
+
+    val mbCreateIndex = idColumn traverse_ { column =>
+      ifIndexExists(logHandler)(unsafeName).option flatMap { results =>
+        val colFragment = Fragments.parentheses(Fragment.const(HANAHygiene.hygienicIdent(Ident(column.name)).forSql))
+        createIndex(logHandler)(obj, unsafeName, colFragment).whenA(results.exists(_ === 0))
+      }
+    }
+
+    prepareTable >> mbCreateIndex
+  }
+
+  def createIndex(log: LogHandler)(obj: Fragment, unsafeName: String, col: Fragment): ConnectionIO[Int] = {
+    val idxName = Fragment.const(HANAHygiene.hygienicIdent(Ident(s"precog_id_idx_$unsafeName")).forSql)
+
+    ((fr"CREATE INDEX" ++
+      idxName ++
+      fr"ON" ++
+      obj ++ col))
+      .updateWithLogHandler(log)
+      .run
   }
 }

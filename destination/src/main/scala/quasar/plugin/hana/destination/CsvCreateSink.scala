@@ -62,8 +62,8 @@ private[destination] object CsvCreateSink {
       MonadResourceErr.unattempt_(pathFragment(path).asScalaz)
 
     def doLoad(obj: Fragment, unsafeName: String): Pipe[F, CharSequence, Unit] = in => {
-      val writeTable: ConnectionIO[Int] =
-        startLoad(logHandler)(writeMode, obj, unsafeName, columns)
+      val writeTable: ConnectionIO[Unit] =
+        startLoad(logHandler)(writeMode, obj, unsafeName, columns, None)
 
       def insert(prefix: StringBuilder, length: Int): Stream[F, Unit] =
         Stream.eval(writeTable.void.transact(xa)) ++
