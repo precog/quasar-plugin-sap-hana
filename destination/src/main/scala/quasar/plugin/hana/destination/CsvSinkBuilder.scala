@@ -62,7 +62,7 @@ private[destination] abstract class CsvSinkBuilder[F[_]: Effect: MonadResourceEr
 
       start = writeMode match {
         case QWriteMode.Replace =>
-          startLoad(logHandler)(jwriteMode, objFragment, unsafeName, inputColumns).transact(xa)
+          startLoad(logHandler)(jwriteMode, objFragment, unsafeName, inputColumns, idColumn).transact(xa)
         case QWriteMode.Append =>
           ().pure[F]
       }
