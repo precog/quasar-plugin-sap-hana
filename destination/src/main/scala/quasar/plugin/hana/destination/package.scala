@@ -41,7 +41,7 @@ package object destination {
   }
 
   def ifIndexExists(logHandler: LogHandler)(unsafeName: String): Query0[Int] = {
-    val idxName = Fragment.const0(s"precog_id_idx_$unsafeName")
+    val idxName = Fragment.const0(indexName(unsafeName))
 
     (fr0"SELECT count(*) as exists_flag FROM INDEXES WHERE TABLE_NAME='" ++ Fragment.const0(unsafeName) ++ fr0"'" ++
       fr0" AND INDEX_NAME='" ++ idxName ++ fr0"'")
@@ -187,7 +187,7 @@ package object destination {
   }
 
   def createIndex(log: LogHandler)(obj: Fragment, unsafeName: String, col: Fragment): ConnectionIO[Int] = {
-    val idxName = Fragment.const(HANAHygiene.hygienicIdent(Ident(s"precog_id_idx_$unsafeName")).forSql)
+    val idxName = Fragment.const(HANAHygiene.hygienicIdent(Ident(indexName(unsafeName))).forSql)
 
     ((fr"CREATE INDEX" ++
       idxName ++
@@ -196,4 +196,7 @@ package object destination {
       .updateWithLogHandler(log)
       .run
   }
+
+  def indexName(unsafeName: String): String =
+    s"precog_id_idx_$unsafeName"
 }
