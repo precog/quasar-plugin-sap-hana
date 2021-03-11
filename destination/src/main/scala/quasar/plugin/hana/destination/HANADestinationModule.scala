@@ -58,13 +58,14 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
       jdbcUrl <- Either.catchNonFatal(URI.create(cc.jdbcUrl)).leftMap(_ => NonEmptyList.one(
         "Malformed JDBC connection string, ensure any restricted characters are properly escaped"))
 
-      txConfig =
+      tc =
         TransactorConfig
           .withDefaultTimeouts(
             JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
             connectionMaxConcurrency = maxConcurrency,
             connectionReadOnly = false)
-          .copy(connectionMaxLifetime = maxLifetime)
+      txConfig = 
+        tc.copy(poolConfig = tc.poolConfig.map(_.copy(connectionMaxLifetime = maxLifetime)))
     } yield txConfig
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
