@@ -1,6 +1,11 @@
-credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
+credentials += Credentials(
+  "GitHub Package Registry", 
+  "maven.pkg.github.com", 
+  sys.env.get("GITHUB_ACTOR").getOrElse(sys.error("Please define GITHUB_ACTOR")), 
+  sys.env.get("GITHUB_TOKEN").getOrElse(sys.error("Please define GITHUB_TOKEN")))
+ 
 resolvers += "GitHub Package Registry" at "https://maven.pkg.github.com/precog/_"
 
-addSbtPlugin("com.eed3si9n" % "sbt-buildinfo"     % "0.9.0")
+addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.9.0")
 addSbtPlugin("com.precog" % "sbt-precog" % "2.5.8-ef77346")
-addSbtPlugin("com.precog"   % "sbt-quasar-plugin" % "0.2.11-5a266f2")
+addSbtPlugin("com.precog" % "sbt-quasar-plugin" % "0.2.11-5a266f2")
