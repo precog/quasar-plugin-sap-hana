@@ -64,7 +64,7 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
             JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
             connectionMaxConcurrency = maxConcurrency,
             connectionReadOnly = false)
-      txConfig = 
+      txConfig =
         tc.copy(poolConfig = tc.poolConfig.map(_.copy(connectionMaxLifetime = maxLifetime)))
     } yield txConfig
 
@@ -73,8 +73,13 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
       transactor: Transactor[F],
       pushPull: PushmiPullyu[F],
       log: Logger)
-      : Resource[F, Either[InitError, Destination[F]]] =
-    (new HANADestination[F](config.writeMode, transactor, log): Destination[F])
-      .asRight[InitError]
-      .pure[Resource[F, ?]]
+      : Resource[F, Either[InitError, Destination[F]]] = {
+    val destination: Destination[F] = new HANADestination(
+      config.writeMode,
+      transactor,
+      config.maxReattempts,
+      config.retryTimeout,
+      log)
+    destination.asRight[InitError].pure[Resource[F, *]]
+  }
 }

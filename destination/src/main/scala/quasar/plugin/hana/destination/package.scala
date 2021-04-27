@@ -22,7 +22,6 @@ import quasar.api.Column
 import quasar.api.resource.{/:, ResourcePath}
 import quasar.connector.ResourceError
 import quasar.lib.jdbc.Ident
-import quasar.lib.jdbc.destination.WriteMode
 
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -47,54 +46,6 @@ package object destination {
       fr0" AND INDEX_NAME='" ++ idxName ++ fr0"'")
       .queryWithLogHandler[Int](logHandler)
   }
-
-  def replaceTable(logHandler: LogHandler)(
-    objFragment: Fragment,
-    unsafeName: String,
-    columns: NonEmptyList[Column[HANAType]])
-      : ConnectionIO[Int] =
-    ifExists(logHandler)(unsafeName).option flatMap { result =>
-      if (result.exists(_ == 1)) {
-        val drop = (fr"DROP TABLE" ++ objFragment)
-          .updateWithLogHandler(logHandler)
-          .run
-        drop >> createTable(logHandler)(objFragment, columns)
-      } else {
-        createTable(logHandler)(objFragment, columns)
-      }
-    }
-
-  def truncateTable(logHandler: LogHandler)(
-    objFragment: Fragment,
-    unsafeName: String,
-    columns: NonEmptyList[Column[HANAType]])
-      : ConnectionIO[Int] =
-    ifExists(logHandler)(unsafeName).option flatMap { result =>
-      if (result.exists(_ == 1))
-        (fr"TRUNCATE TABLE" ++ objFragment)
-          .updateWithLogHandler(logHandler)
-          .run
-      else
-        createTable(logHandler)(objFragment, columns)
-    }
-
-  def appendToTable(logHandler: LogHandler)(
-    objFragment: Fragment,
-    unsafeName: String,
-    columns: NonEmptyList[Column[HANAType]])
-      : ConnectionIO[Int] =
-    ifExists(logHandler)(unsafeName).option flatMap { result =>
-      if (result.exists(_ == 1))
-        0.pure[ConnectionIO]
-      else
-        createTable(logHandler)(objFragment, columns)
-    }
-
-  def createTable(logHandler: LogHandler)(objFragment: Fragment, columns: NonEmptyList[Column[HANAType]])
-      : ConnectionIO[Int] =
-    (fr"CREATE TABLE" ++ objFragment ++ fr0" " ++ createColumnSpecs(hygienicColumns(columns)))
-      .updateWithLogHandler(logHandler)
-      .run
 
   def hygienicColumns(columns: NonEmptyList[Column[HANAType]]): NonEmptyList[(HI, HANAType)] =
     columns.map(c => (HANAHygiene.hygienicIdent(Ident(c.name)), c.tpe))
@@ -160,31 +111,6 @@ package object destination {
     Some(p) collect {
       case fst /: ResourcePath.Root => Ident(fst)
     }
-
-  def startLoad(logHandler: LogHandler)(
-    writeMode: WriteMode,
-    obj: Fragment,
-    unsafeName: String,
-    columns: NonEmptyList[Column[HANAType]],
-    idColumn: Option[Column[_]])
-      : ConnectionIO[Unit] = {
-
-    val prepareTable = writeMode match {
-      case WriteMode.Create => createTable(logHandler)(obj, columns)
-      case WriteMode.Replace => replaceTable(logHandler)(obj, unsafeName, columns)
-      case WriteMode.Truncate => truncateTable(logHandler)(obj, unsafeName, columns)
-      case WriteMode.Append => appendToTable(logHandler)(obj, unsafeName, columns)
-    }
-
-    val mbCreateIndex = idColumn traverse_ { column =>
-      ifIndexExists(logHandler)(unsafeName).option flatMap { results =>
-        val colFragment = Fragments.parentheses(Fragment.const(HANAHygiene.hygienicIdent(Ident(column.name)).forSql))
-        createIndex(logHandler)(obj, unsafeName, colFragment).whenA(results.exists(_ === 0))
-      }
-    }
-
-    prepareTable >> mbCreateIndex
-  }
 
   def createIndex(log: LogHandler)(obj: Fragment, unsafeName: String, col: Fragment): ConnectionIO[Int] = {
     val idxName = Fragment.const(HANAHygiene.hygienicIdent(Ident(indexName(unsafeName))).forSql)
