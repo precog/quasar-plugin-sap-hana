@@ -140,7 +140,6 @@ object TempTableFlow {
 
       val hyColumns = hygienicColumns(columns)
 
-
       val run: Fragment => ConnectionIO[Unit] =
         _.updateWithLogHandler(log).run.void
 
@@ -172,7 +171,7 @@ object TempTableFlow {
         val mkColumn: String => Fragment = parent =>
           Fragment.const0(parent) ++ fr0"." ++
           Fragment.const0(HANAHygiene.hygienicIdent(Ident(idColumn.name)).forSql)
-
+        // SAP Hana doesn't support DELETE INNER JOIN, but supports MERGE 0_o
         fr"MERGE INTO" ++ tgtFragment ++ fr" AS TGT" ++
         fr"USING" ++ tmpFragment ++ fr" AS TMP" ++
         fr"ON" ++ mkColumn("TGT") ++ fr0"=" ++ mkColumn("TMP")
