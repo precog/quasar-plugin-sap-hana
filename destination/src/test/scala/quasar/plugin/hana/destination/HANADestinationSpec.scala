@@ -63,7 +63,7 @@ object HANADestinationSpec extends TestHarness with Logging {
       : Resource[IO, (Transactor[IO], HANADestination[IO], ResourcePath, String)] =
     tableHarness(jdbcUrl, specialString) map {
       case (xa, path, name) => {
-        (xa, new HANADestination(writeMode, xa, 0, 0.seconds, log), path, name)
+        (xa, new HANADestination(writeMode, Resource.pure[IO, Transactor[IO]](xa), 0, 0.seconds, log), path, name)
       }
     }
 

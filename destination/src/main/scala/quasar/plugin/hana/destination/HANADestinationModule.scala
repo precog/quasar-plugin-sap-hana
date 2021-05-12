@@ -37,7 +37,7 @@ import doobie.Transactor
 
 import org.slf4s.Logger
 
-object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
+object HANADestinationModule extends DeferredJdbcDestinationModule[DestinationConfig] {
 
   val DefaultConnectionMaxConcurrency: Int = 8
   val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
@@ -70,7 +70,7 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: DestinationConfig,
-      transactor: Transactor[F],
+      transactor: Resource[F, Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] = {

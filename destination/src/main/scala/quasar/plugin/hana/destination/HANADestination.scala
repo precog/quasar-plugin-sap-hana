@@ -24,7 +24,7 @@ import quasar.connector.MonadResourceErr
 import quasar.connector.render.RenderConfig
 import quasar.connector.destination.{Constructor, Destination}
 import quasar.lib.jdbc.destination.WriteMode
-import quasar.lib.jdbc.destination.flow.{FlowSinks, FlowArgs, Flow, Retry}
+import quasar.lib.jdbc.destination.flow.{DeferredFlowSinks, FlowArgs, Flow, Retry}
 
 import cats.data.NonEmptyList
 import cats.effect.{ConcurrentEffect, Timer, Resource}
@@ -41,11 +41,11 @@ import scala.concurrent.duration._
 
 private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadResourceErr: Timer](
     writeMode: WriteMode,
-    xa: Transactor[F],
+    xar: Resource[F, Transactor[F]],
     maxReattempts: Int,
     retryTimeout: FiniteDuration,
     logger: Logger)
-    extends Destination[F] with FlowSinks[F, HANAType, CharSequence] {
+    extends Destination[F] with DeferredFlowSinks[F, HANAType, CharSequence] {
 
   type Type = HANAType
   type TypeId = HANATypeId
@@ -54,15 +54,17 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
 
   // --
 
-  val flowTransactor = Transactor.strategy.set(xa, Strategy.default)
+  val transactorResource = xar map (Transactor.strategy.set(_, Strategy.default))
   val flowLogger = logger
   val sinks = flowSinks
 
   def render(args: FlowArgs[Type]) = RenderConfig.Separated(",", HANAColumnRender(args.columns))
 
   def flowResource(args: FlowArgs[Type]): Resource[F, Flow[CharSequence]] =
-    TempTableFlow(flowTransactor, logger, writeMode, args) map { (f: Flow[CharSequence]) =>
-      f.mapK(Retry[F](maxReattempts, retryTimeout))
+    transactorResource flatMap { flowTransactor =>
+      TempTableFlow(flowTransactor, logger, writeMode, args) map { (f: Flow[CharSequence]) =>
+        f.mapK(Retry[F](maxReattempts, retryTimeout))
+      }
     }
 
   // --
