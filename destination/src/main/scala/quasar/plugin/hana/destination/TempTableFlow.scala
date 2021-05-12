@@ -136,7 +136,7 @@ object TempTableFlow {
         filterColumn: Option[Column[_]])
         : TempTable = {
       val tempName = s"precog_temp_$unsafeName"
-      val tmpFragment = Fragment.const0(HANAHygiene.hygienicIdent(Ident(unsafeName)).forSql)
+      val tmpFragment = Fragment.const0(HANAHygiene.hygienicIdent(Ident(tempName)).forSql)
 
       val hyColumns = hygienicColumns(columns)
 
@@ -145,12 +145,20 @@ object TempTableFlow {
 
       def whenExists(s: String): Fragment => ConnectionIO[Unit] = fr =>
         ifExists(log)(s).option.flatMap { results =>
-          run(fr).whenA(results.exists(_ === 1))
+          if (results.exists(_ === 1)) {
+            run(fr)
+          } else {
+            ().pure[ConnectionIO]
+          }
         }
 
       def unlessExists(s: String): Fragment => ConnectionIO[Unit] = fr =>
         ifExists(log)(s).option.flatMap { results =>
-          run(fr).unlessA(results.exists(_ === 1))
+          if (results.exists(_ === 1)) {
+            ().pure[ConnectionIO]
+          } else {
+            run(fr)
+          }
         }
 
 
@@ -159,8 +167,11 @@ object TempTableFlow {
       }
 
       def insertInto: ConnectionIO[Unit] = run {
-        fr"INSERT INTO" ++ tgtFragment ++ fr0" " ++
-        fr"SELECT * FROM" ++ tmpFragment
+        val cols = columnSpecs(hyColumns)
+        val toInsert = insertColumnSpecs(hyColumns)
+
+        fr"INSERT INTO" ++ tgtFragment ++ fr0" " ++ toInsert ++ fr0" " ++
+        fr"SELECT" ++ cols ++ fr" FROM" ++ tmpFragment
       }
 
       def rename: ConnectionIO[Unit] = run {
@@ -174,7 +185,7 @@ object TempTableFlow {
         // SAP Hana doesn't support DELETE INNER JOIN, but supports MERGE 0_o
         fr"MERGE INTO" ++ tgtFragment ++ fr" AS TGT" ++
         fr"USING" ++ tmpFragment ++ fr" AS TMP" ++
-        fr"ON" ++ mkColumn("TGT") ++ fr0"=" ++ mkColumn("TMP")
+        fr"ON" ++ mkColumn("TGT") ++ fr0"=" ++ mkColumn("TMP") ++
         fr"WHEN MATCHED THEN DELETE"
       }
 
@@ -183,7 +194,7 @@ object TempTableFlow {
         insertInto
 
       def createTgt: ConnectionIO[Unit] = run {
-        fr"CREATE TABLE" ++ tmpFragment ++ fr0" " ++ createColumnSpecs(hyColumns)
+        fr"CREATE TABLE" ++ tgtFragment ++ fr0" " ++ createColumnSpecs(hyColumns)
       }
 
       def dropTgtIfExists: ConnectionIO[Unit] = whenExists(unsafeName) {
@@ -195,13 +206,17 @@ object TempTableFlow {
       }
 
       def createTgtIfNotExists: ConnectionIO[Unit] = unlessExists(unsafeName) {
-        fr"CREATE TABLE" ++ tmpFragment ++ fr0" " ++ createColumnSpecs(hyColumns)
+        fr"CREATE TABLE" ++ tgtFragment ++ fr0" " ++ createColumnSpecs(hyColumns)
       }
 
       def index(tbl: Fragment, col: Column[_]): ConnectionIO[Unit] =
         ifIndexExists(log)(unsafeName).option flatMap { results =>
           val colFragment = Fragments.parentheses(Fragment.const(HANAHygiene.hygienicIdent(Ident(col.name)).forSql))
-          createIndex(log)(tbl, unsafeName, colFragment).unlessA(results.exists(_ === 1))
+          if (results.exists(_ === 1)) {
+            ().pure[ConnectionIO]
+          } else {
+            createIndex(log)(tbl, unsafeName, colFragment).unlessA(results.exists(_ === 1))
+          }
         }
 
       new TempTable {
@@ -230,7 +245,7 @@ object TempTableFlow {
           val prepare = writeMode match {
             case WriteMode.Create =>
               createTgt >>
-              idColumn.traverse_(index(tgtFragment, _))
+              idColumn.traverse_(index(tgtFragment, _)) >>
               append
             case WriteMode.Replace =>
               dropTgtIfExists >>

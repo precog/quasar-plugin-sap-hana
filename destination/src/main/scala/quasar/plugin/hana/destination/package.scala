@@ -56,11 +56,11 @@ package object destination {
         .map { case (n, t) => Fragment.const(n.forSql) ++ t.asSql }
         .intercalate(fr","))
 
+  def columnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
+    cols.map({ case (n, _) => Fragment.const(n.forSql)}).intercalate(fr",")
+
   def insertColumnSpecs(cols: NonEmptyList[(HI, HANAType)]): Fragment =
-    Fragments.parentheses(
-      cols
-        .map { case (n, _) => Fragment.const(n.forSql) }
-        .intercalate(fr","))
+    Fragments.parentheses(columnSpecs(cols))
 
   def insertIntoPrefix(
     logHandler: LogHandler)(

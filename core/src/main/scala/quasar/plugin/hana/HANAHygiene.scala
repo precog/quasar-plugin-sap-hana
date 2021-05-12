@@ -18,11 +18,14 @@ package quasar.plugin.hana
 
 import scala.StringContext
 
+import doobie._
+import java.lang.String
 import quasar.lib.jdbc.{Hygiene, Hygienic, Ident}
 
 object HANAHygiene extends Hygiene {
   final case class HygienicIdent(asIdent: Ident) extends Hygienic {
-    def forSql = s""""${asIdent.asString}""""
+    def forSql: String = s""""${asIdent.asString}""""
+    def asSql: Fragment = Fragment.const0(forSql)
   }
 
   def hygienicIdent(ident: Ident): HygienicIdent =

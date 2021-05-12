@@ -31,8 +31,9 @@ lazy val core = project
     name := "quasar-plugin-sap-hana",
 
     libraryDependencies ++= Seq(
-      "com.precog" %% "quasar-lib-jdbc" % quasarLibJdbcVersion.value,
-      "org.specs2" %% "specs2-core"     % specs2Version % Test
+      "com.precog"     %% "quasar-lib-jdbc"            % quasarLibJdbcVersion.value,
+      "com.codecommit" %% "cats-effect-testing-specs2" % "0.4.0" % Test,
+      "org.specs2"     %% "specs2-core"                % specs2Version % Test
     ))
 
 lazy val destination = project
