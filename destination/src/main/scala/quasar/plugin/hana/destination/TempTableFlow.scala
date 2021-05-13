@@ -236,13 +236,18 @@ object TempTableFlow {
           truncate
 
         def persist: ConnectionIO[Unit] = {
+          // `create` adds an index on `filterColumn` if it's `Some`
+          // we don't need to create indices in `Replace` mode if
+          // `filterColumn` and `idColumn` are the same.
+          // They might differ if we're in append sink w/ optional id column
           val indexColumn =
             if (idColumn.map(_.name) =!= filterColumn.map(_.name))
               idColumn
             else
               none[Column[_]]
 
-          val prepare = writeMode match {
+          // `idColumn` for tgtTable, `filterColumn` for tmpTable indices
+          writeMode match {
             case WriteMode.Create =>
               createTgt >>
               idColumn.traverse_(index(tgtFragment, _)) >>
@@ -250,17 +255,18 @@ object TempTableFlow {
             case WriteMode.Replace =>
               dropTgtIfExists >>
               rename >>
-              create
+              create >>
+              indexColumn.traverse_(index(tgtFragment, _))
             case WriteMode.Truncate =>
               createTgtIfNotExists >>
+              idColumn.traverse_(index(tgtFragment, _)) >>
               truncateTgt >>
               append
             case WriteMode.Append =>
               createTgtIfNotExists >>
+              idColumn.traverse_(index(tgtFragment, _)) >>
               append
           }
-          prepare >>
-          indexColumn.traverse_(index(tgtFragment, _))
         }
       }
     }
