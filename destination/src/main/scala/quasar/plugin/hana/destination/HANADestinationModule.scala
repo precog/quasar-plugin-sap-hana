@@ -37,7 +37,7 @@ import doobie.Transactor
 
 import org.slf4s.Logger
 
-object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
+object HANADestinationModule extends DeferredJdbcDestinationModule[DestinationConfig] {
 
   val DefaultConnectionMaxConcurrency: Int = 8
   val DefaultConnectionMaxLifetime: FiniteDuration = 5.minutes
@@ -64,17 +64,22 @@ object HANADestinationModule extends JdbcDestinationModule[DestinationConfig] {
             JdbcDriverConfig.JdbcDriverManagerConfig(jdbcUrl, Some("com.sap.db.jdbc.Driver")),
             connectionMaxConcurrency = maxConcurrency,
             connectionReadOnly = false)
-      txConfig = 
+      txConfig =
         tc.copy(poolConfig = tc.poolConfig.map(_.copy(connectionMaxLifetime = maxLifetime)))
     } yield txConfig
 
   def jdbcDestination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: DestinationConfig,
-      transactor: Transactor[F],
+      transactor: Resource[F, Transactor[F]],
       pushPull: PushmiPullyu[F],
       log: Logger)
-      : Resource[F, Either[InitError, Destination[F]]] =
-    (new HANADestination[F](config.writeMode, transactor, log): Destination[F])
-      .asRight[InitError]
-      .pure[Resource[F, ?]]
+      : Resource[F, Either[InitError, Destination[F]]] = {
+    val destination: Destination[F] = new HANADestination(
+      config.writeMode,
+      transactor,
+      config.maxReattempts,
+      config.retryTimeout,
+      log)
+    destination.asRight[InitError].pure[Resource[F, *]]
+  }
 }

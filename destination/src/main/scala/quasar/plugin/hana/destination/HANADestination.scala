@@ -21,40 +21,60 @@ import scala._, Predef._
 import quasar.api.{ColumnType, Label}
 import quasar.api.push.TypeCoercion
 import quasar.connector.MonadResourceErr
-import quasar.connector.destination.{Constructor, Destination, ResultSink}
+import quasar.connector.render.RenderConfig
+import quasar.connector.destination.{Constructor, Destination}
 import quasar.lib.jdbc.destination.WriteMode
+import quasar.lib.jdbc.destination.flow.{DeferredFlowSinks, FlowArgs, Flow, Retry}
 
+import cats.Applicative
 import cats.data.NonEmptyList
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{ConcurrentEffect, Timer, Resource}
 
 import doobie.Transactor
+import doobie.util.transactor.Strategy
 
 import monocle.Prism
 
 import org.slf4s.Logger
 
+import java.lang.CharSequence
+import scala.concurrent.duration._
+
 private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadResourceErr: Timer](
     writeMode: WriteMode,
-    xa: Transactor[F],
+    xar: Resource[F, Transactor[F]],
+    maxReattempts: Int,
+    retryTimeout: FiniteDuration,
     logger: Logger)
-    extends Destination[F] {
+    extends Destination[F] with DeferredFlowSinks[F, HANAType, CharSequence] {
 
   type Type = HANAType
   type TypeId = HANATypeId
 
   val destinationType = HANADestinationModule.destinationType
 
+  // --
+
+  def transactorResource(implicit F: Applicative[F]) = xar map (Transactor.strategy.set(_, Strategy.default))
+  val flowLogger = logger
+  val sinks = flowSinks
+
+  def render(args: FlowArgs[Type]) = RenderConfig.Separated(",", HANAColumnRender(args.columns))
+
+  def flowResource(args: FlowArgs[Type]): Resource[F, Flow[CharSequence]] =
+    transactorResource flatMap { flowTransactor =>
+      TempTableFlow(flowTransactor, logger, writeMode, args) map { (f: Flow[CharSequence]) =>
+        f.mapK(Retry[F](maxReattempts, retryTimeout))
+      }
+    }
+
+  // --
+
   val typeIdOrdinal: Prism[Int, TypeId] =
     Prism(HANADestination.OrdinalMap.get(_))(_.ordinal)
 
   val typeIdLabel: Label[TypeId] =
     Label.label[TypeId](_.toString)
-
-  val sinks: NonEmptyList[ResultSink[F, Type]] =
-    NonEmptyList.of(
-      ResultSink.create(CsvCreateSink[F](writeMode, xa, logger)),
-      ResultSink.upsert(CsvUpsertSink[F](writeMode, xa, logger)),
-      ResultSink.append(CsvAppendSink[F](writeMode, xa, logger)))
 
   def coerce(tpe: ColumnType.Scalar): TypeCoercion[TypeId] = {
     def satisfied(t: TypeId, ts: TypeId*) =

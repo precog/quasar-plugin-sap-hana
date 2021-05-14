@@ -16,10 +16,11 @@
 
 package quasar.plugin.hana.destination
 
+import slamdata.Predef.{Eq => _, _}
+
 import quasar.plugin.hana.ConnectionConfig
 
-import scala.StringContext
-import java.lang.String
+import scala.concurrent.duration._
 
 import argonaut._, Argonaut._
 
@@ -30,21 +31,36 @@ import quasar.lib.jdbc.destination.WriteMode
 
 final case class DestinationConfig(
     connectionConfig: ConnectionConfig,
-    writeMode: WriteMode) {
+    writeMode: WriteMode,
+    retryTransactionTimeoutMs: Option[Int],
+    maxTransactionReattempts: Option[Int]) {
 
   def jdbcUrl: String =
     connectionConfig.jdbcUrl
 
   def sanitized: DestinationConfig =
     copy(connectionConfig = connectionConfig.sanitized)
+
+  def retryTimeout: FiniteDuration =
+    retryTransactionTimeoutMs.map(_.milliseconds) getOrElse DestinationConfig.DefaultRetryTimeout
+
+  def maxReattempts: Int =
+    maxTransactionReattempts getOrElse DestinationConfig.DefaultMaxReattempts
 }
 
 object DestinationConfig {
+  private val DefaultRetryTimeout = 60.seconds
+  private val DefaultMaxReattempts = 10
+
   implicit val destinationConfigCodecJson: CodecJson[DestinationConfig] =
-    casecodec2(DestinationConfig.apply, DestinationConfig.unapply)("connection", "writeMode")
+    casecodec4(DestinationConfig.apply, DestinationConfig.unapply)(
+      "connection",
+      "writeMode",
+      "retryTransactionTimeoutMs",
+      "maxTransactionReattempts")
 
   implicit val destinationConfigEq: Eq[DestinationConfig] =
-    Eq.by(c => (c.connectionConfig, c.writeMode))
+    Eq.by(c => (c.connectionConfig, c.writeMode, c.retryTransactionTimeoutMs, c.maxTransactionReattempts))
 
   implicit val destinationConfigShow: Show[DestinationConfig] =
     Show.show(c => s"DestinationConfig(${c.connectionConfig.show}, ${c.writeMode.show})")
