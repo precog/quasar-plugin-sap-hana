@@ -26,6 +26,7 @@ import quasar.connector.destination.{Constructor, Destination}
 import quasar.lib.jdbc.destination.WriteMode
 import quasar.lib.jdbc.destination.flow.{DeferredFlowSinks, FlowArgs, Flow, Retry}
 
+import cats.Applicative
 import cats.data.NonEmptyList
 import cats.effect.{ConcurrentEffect, Timer, Resource}
 
@@ -54,7 +55,7 @@ private[destination] final class HANADestination[F[_]: ConcurrentEffect: MonadRe
 
   // --
 
-  val transactorResource = xar map (Transactor.strategy.set(_, Strategy.default))
+  def transactorResource(implicit F: Applicative[F]) = xar map (Transactor.strategy.set(_, Strategy.default))
   val flowLogger = logger
   val sinks = flowSinks
 
