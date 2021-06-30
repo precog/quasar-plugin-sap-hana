@@ -42,8 +42,7 @@ package object destination {
   def ifIndexExists(logHandler: LogHandler)(unsafeName: String): Query0[Int] = {
     val idxName = Fragment.const0(indexName(unsafeName))
 
-    (fr0"SELECT count(*) as exists_flag FROM INDEXES WHERE TABLE_NAME='" ++ Fragment.const0(unsafeName) ++ fr0"'" ++
-      fr0" AND INDEX_NAME='" ++ idxName ++ fr0"'")
+    (fr0"SELECT count(*) as exists_flag FROM INDEXES WHERE INDEX_NAME='" ++ idxName ++ fr0"'")
       .queryWithLogHandler[Int](logHandler)
   }
 
