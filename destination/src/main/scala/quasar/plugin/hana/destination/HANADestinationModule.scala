@@ -20,7 +20,7 @@ import scala._, Predef._
 import scala.concurrent.duration._
 
 import quasar.api.destination.DestinationType
-import quasar.connector.MonadResourceErr
+import quasar.connector.{MonadResourceErr, GetAuth}
 import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.lib.jdbc._
 import quasar.lib.jdbc.destination._
@@ -72,6 +72,7 @@ object HANADestinationModule extends DeferredJdbcDestinationModule[DestinationCo
       config: DestinationConfig,
       transactor: Resource[F, Transactor[F]],
       pushPull: PushmiPullyu[F],
+      auth: GetAuth[F],
       log: Logger)
       : Resource[F, Either[InitError, Destination[F]]] = {
     val destination: Destination[F] = new HANADestination(
